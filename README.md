@@ -92,7 +92,8 @@ other apps: `llamatalk/models.sh path` says where).
 
 To build a release: `build/build.sh` on an arm64 Linux machine with podman (it builds llamatalk at its pinned commit).
 `build/release.sh` builds what is on `main`, checks the tarball and uploads it as a draft GitHub release `v<VERSION>`
-(`DRY=1` builds and checks without uploading).
+(`DRY=1` builds and checks without uploading; `ENGINE=docker` builds with docker; `PREBUILT=1` uploads a tarball
+built by `DRY=1` on a build server from the same commit).
 
 ## ROMs
 

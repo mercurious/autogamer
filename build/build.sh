@@ -3,11 +3,11 @@
 # with podman and git. Autogamer itself is Python and shell; the one thing built is llamatalk (llama-server,
 # tts-server and models.sh), fetched at its pinned commit and built by its own build/build.sh.
 # Env: JOBS (default 3), LLAMATALK_SRC=<a clean llamatalk checkout at LLAMATALK_COMMIT> builds from it (and its build
-# cache) instead of a fetch.
+# cache) instead of a fetch, ENGINE (podman, default, or docker; passed to llamatalk's build).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 W="$ROOT/build/work"; OUT="$ROOT/dist/autogamer"; VER=$(cat "$ROOT/VERSION")
-LLAMATALK=https://github.com/mercurious/llamatalk    LLAMATALK_COMMIT=091fd0054909ac0e9a67473b7642f89f725ce854
+LLAMATALK=https://github.com/mercurious/llamatalk    LLAMATALK_COMMIT=d422c0b36c2ec7cd9359c9250a0bd8cb88f71111
 
 fetch() {   # fetch <url> <commit> <dir>: that one commit, nothing else
   [ "$(git -C "$3" rev-parse HEAD 2>/dev/null)" = "$2" ] && return 0
@@ -28,7 +28,7 @@ JOBS=${JOBS:-3} "$LT/build/build.sh"
 rm -rf "$OUT"; mkdir -p "$OUT"
 cp -r "$LT/dist/llamatalk" "$ROOT/app" "$ROOT/ports" "$ROOT/test" "$ROOT/tools" "$OUT/"
 cp "$ROOT"/install.sh "$ROOT"/README.md "$ROOT"/LICENSE "$ROOT"/THIRD_PARTY.md "$ROOT"/VERSION "$OUT/"
-{ echo "autogamer $VER ($(git -C "$ROOT" rev-parse --short HEAD))"; cat "$LT/dist/llamatalk/BUILD.txt"; } > "$OUT/BUILD.txt"
+{ echo "autogamer $VER $(git -C "$ROOT" rev-parse HEAD)"; cat "$LT/dist/llamatalk/BUILD.txt"; } > "$OUT/BUILD.txt"
 find "$OUT" -name __pycache__ -prune -exec rm -rf {} +
 chmod +x "$OUT"/install.sh "$OUT"/app/*.sh "$OUT"/test/*.sh
 tar -C "$ROOT/dist" -czf "$ROOT/dist/autogamer-aarch64.tar.gz" autogamer
