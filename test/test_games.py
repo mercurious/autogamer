@@ -50,8 +50,8 @@ p, v = games.find(game(crc=("00000000",)), T)
 ok(p is not None and not v, "a broken zip is skipped, not fatal")
 
 ids = [g["id"] for g in games.GAMES]
-ok(len(ids) == len(set(ids)) == 7, "seven games, unique ids")
-ok([g["section"] for g in games.GAMES] == ["main"] * 4 + ["bonus"] * 3, "four main games, then three bonus")
+ok(len(ids) == len(set(ids)) == 8, "eight games, unique ids")
+ok([g["section"] for g in games.GAMES] == ["main"] * 5 + ["bonus"] * 3, "five main games, then three bonus")
 ok(all(re.fullmatch(r"[0-9a-f]{8}", c) for g in games.GAMES for c in g["crc"]), "CRCs are 8 lower-case hex digits")
 ok(all(len(g["crc"]) == 2 for g in games.GAMES if g["system"] == "nes"), "NES games know the dump with and without header")
 ok(all(len(g["about"]) <= 3 and all(len(l) <= 60 for l in g["about"]) for g in games.GAMES), "menu text fits 3 x 60")

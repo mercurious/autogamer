@@ -1,7 +1,7 @@
 # Autogamer
 
 A small language model plays retro games on a handheld while you watch: it places Tetris pieces, aims tennis
-returns, runs a motocross engine, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
+returns, runs a motocross engine, picks its moments to attack in a boxing ring, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
 no cloud and no account. The model is slow, so the games run in slow motion at a level you choose. That makes a
 contest: at Hard it keeps up, at Expert the game runs at real speed and the model falls behind.
 
@@ -22,6 +22,7 @@ One **Autogamer** entry under Ports opens a menu:
 | main | **Tetris: the model decides** (NES) | the model picks where every piece goes, thinking while it falls | whether it keeps the stack down; too late, and the piece drops low where it falls |
 | main | **NES Tennis: the model aims every return** | the player runs and swings; the model picks where each return lands, of the two ends it can reach inside the court | points won and lost against the game's computer; too late, and it hits on impulse, away from the computer |
 | main | **Excitebike: the model rides the turbo** | a reflex rider steers, jumps and lands; the model calls turbo or cruise, each call holding until the next | the race clock against the qualifying time; too slow to ease off, and the engine overheats |
+| main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model calls pummel, body blows or wait whenever the opponent is open, in bullet time | the fight: win and the next opponent comes out; too late, and the opening is gone |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
 | bonus | **Tennis (Atari 2600): the model aims** | the model aims every return | it seldom wins a point: what a small model cannot do yet |
 | bonus | **Tetris: the heuristic** | a hand-written placement rule, no model | full-speed Tetris to level 27 and beyond |
@@ -37,12 +38,12 @@ located the ball no better than a guess).
 
 The model games have four levels, chosen on the screen while the model loads and changed at any time with **SELECT**:
 
-| level | Tetris | Tennis | Excitebike |
-|---|---|---|---|
-| Hard | the model has 2x its usual think time per piece | most shots answered in time | a call every second of race time |
-| Harder | 1.5x | about half | every 2 s |
-| Hardest (default) | 1.2x | few | every 3 s |
-| Expert | real time | real time | real time |
+| level | Tetris | Tennis | Excitebike | Punch-Out!! |
+|---|---|---|---|---|
+| Hard | the model has 2x its usual think time per piece | most shots answered in time | a call every second of race time | a human's 0.5 s to call an opening |
+| Harder | 1.5x | about half | every 2 s | 0.75 s |
+| Hardest (default) | 1.2x | few | every 3 s | 1 s |
+| Expert | real time | real time | real time | real time |
 
 The game runs in RetroArch's slow motion (the music slows and drops with it). Each session measures the model's think
 time and the next one sets the speeds from it. Tetris starts at the NES level whose pieces fall in about the model's
@@ -53,6 +54,16 @@ while cruising cools it to 17. The model's call holds until its next one, so the
 finely it can run the turbo. Each question tells it how long its answer will take in race time and what each choice
 would do to the temperature by then. Qualify (the 3RD time on the screen) and the next race starts; miss and it is
 game over.
+
+In Punch-Out!! Mac dodges every punch by himself (a reflex loop that knows when each one lands). The model runs the
+offence: whenever the opponent is open, reeling after a dodge or standing off defence (from the bell on), the game
+drops into bullet time (slow motion at the level's ratio) and the model calls PUMMEL (rapid jabs to the face until
+they are blocked), BODY (rapid body blows) or WAIT, and while Mac has a star, STAR: the uppercut (START). Mac loses a
+star each time he is hit and all of them when the round ends, so when to spend one is the model's call too. Each
+question carries its record in that situation, tries, hits and blocks, which is how it learns where an opponent is
+open: Glass Joe takes 5-6 head hits after a dodge and 3 while he stands, and blocks every body blow while he stands.
+A call that comes after the opening has closed is wasted. Win and the next opponent comes out; lose and it is a
+rematch; a third loss is game over.
 
 ## What to expect
 
@@ -66,10 +77,11 @@ Measured on a 12 GB Flip 2 (ROCKNIX 20261001), CPU only:
 | Atari Tennis commentary, E2B | a point called 3.5-4 s after it ends, the winner right 10 times out of 10 |
 | Atari Tennis, the bot | won a set 6-3 against the game's computer |
 | Excitebike, E4B | 3.4-4.0 s per call; at Hardest it qualified on track 1 in 1:09.61 (the game's record was 1:16), 24 calls, about a third of the race on turbo, no overheat, one fall. Cruising only, the rider takes 72-91 s on the five tracks against qualifying times of 74-84 s: from track 3 on, the turbo decides |
+| Punch-Out!!, E4B, 8 GB Flip 2 | 4.1 s per call; at Hardest it beat Glass Joe and Von Kaiser and reached Piston Honda: 34 pummels landed 96 hits, 36 punches dodged and none taken, 16 of 42 calls too late for their opening |
 | frame pacing | the panel runs at 60 Hz during a game (put back after): 1 % of frames off the 16.7 ms cadence |
 | loading | E4B is 5 GB: the first start after a boot reads it from the SD card (a minute or more); the game waits, paused |
 
-Not yet tested: the 8 GB Flip 2 (E4B next to RetroArch), other handhelds, other ROCKNIX releases.
+Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with E4B next to RetroArch), other handhelds, other ROCKNIX releases.
 
 ## Requirements
 
@@ -97,7 +109,7 @@ for example on the SD card:
 ```sh
 tar xzf autogamer-aarch64.tar.gz && cd autogamer
 ./install.sh              # the models (if not already on the device), the Ports entry, and which ROMs it found
-./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis and Excitebike then play with E2B)
+./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike and Punch-Out!! then play with E2B)
 ```
 
 Then refresh the game lists in EmulationStation and start **Autogamer** from Ports. The models go to
@@ -121,6 +133,7 @@ Put your own copies in ROCKNIX's ROM folders, zipped or not (`.zip`, `.nes`, `.a
 | Tennis (NES) | `roms/nes` | Tennis (Japan, USA) | `d4d9e21a` without the header, `5f457c00` with it |
 | Super Mario Bros. (NES) | `roms/nes` | Super Mario Bros. (World) | `d445f698` without the header, `3337ec46` with it |
 | Excitebike (NES) | `roms/nes` | Excitebike (Nintendo, 1984) | `49aeb3a6` without the header, `6faa4584` with an old "DiskDude!" header |
+| Mike Tyson's Punch-Out!! (NES) | `roms/nes` | Mike Tyson's Punch-Out!! (Nintendo, 1987) | `2c818014` without the header, `3df8e170` with it |
 | Tennis (Atari 2600) | `roms/atari2600` | Activision, 1981 | `0a42515b` |
 
 The players read each game's memory at fixed addresses, which belong to one version of the game, so autogamer looks
@@ -151,10 +164,10 @@ Environment variables for `app/autogamer.sh` or `app/run.sh` (set them in the Po
 
 | variable | meaning |
 |---|---|
-| `AG_GAME` | play this game (`tetris-model`, `ntennis-model`, `excitebike-model`, `tennis`, `tennis-model`, `tetris`, `smb`) without the menu |
+| `AG_GAME` | play this game (`tetris-model`, `ntennis-model`, `excitebike-model`, `punchout-model`, `tennis`, `tennis-model`, `tetris`, `smb`) without the menu |
 | `AG_LEVEL` | the level, 0-3 (Hard to Expert), without the picker; `AG_PICK=0`: the last one, without the picker |
 | `AG_MODELS`, `AG_ROMS` | the models directory (default: llamatalk's shared one), the ROM folders (default `/storage/roms`) |
-| `AG_TETRIS_MODEL`, `AG_NTENNIS_MODEL`, `AG_EXCITEBIKE_MODEL`, `AG_TENNIS_MODEL` | another model (gguf basename in the models directory) |
+| `AG_TETRIS_MODEL`, `AG_NTENNIS_MODEL`, `AG_EXCITEBIKE_MODEL`, `AG_PUNCHOUT_MODEL`, `AG_TENNIS_MODEL` | another model (gguf basename in the models directory) |
 | `AG_TL_GAMELEVEL` | Tetris: the NES level to start at (default: from the model's think time) |
 | `AG_NT_CPU` | NES Tennis: the game's own computer level, 1-5 (default 1) |
 | `AG_EB_TRACK` | Excitebike: the track the series starts on, 1-5 (default 1) |
@@ -176,5 +189,5 @@ seconds apart, each one visible on the screen, and a clock that keeps running wh
 ## Licence
 
 MIT, see `LICENSE`. The runtime it bundles and the models it downloads have their own licences: see
-`THIRD_PARTY.md`. Tetris, Tennis, Excitebike and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
+`THIRD_PARTY.md`. Tetris, Tennis, Excitebike, Punch-Out!! and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
 with or endorsed by them.

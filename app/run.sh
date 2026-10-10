@@ -16,6 +16,10 @@
 #                 reflex rider (wheelie over hurdles, landings) and the model (E4B if installed, AG_EXCITEBIKE_MODEL)
 #                 calling turbo or cruise, each call holding until the next: a turbo it is too slow to call off
 #                 overheats the engine. Slow-motion levels as for tetris-model, by a human's 1, 2, 3 s a call.
+#   punchout-model  Mike Tyson's Punch-Out!! (fceumm): punchout_llm.py, a reflex loop dodges every punch; the model
+#                 (E4B if installed, AG_PUNCHOUT_MODEL) runs the offence: when the opponent is open it calls pummel,
+#                 body blows or wait, in bullet time (the game runs in real time and slows down for each call). Levels
+#                 by a human's 0.5, 0.75, 1 s to see the opening.
 #   tennis        Activision Tennis (Atari 2600, stella): play.py vs the CPU, narrate.py calls the match (E2B, Pocket TTS)
 #   tennis-model  Activision Tennis: the model aims every return (tennis_llm.py; E2B, AG_TENNIS_MODEL), play.py's reflex
 #                 loop runs to the ball. Slow-motion levels; a ball the model has not answered in time is missed.
@@ -29,7 +33,7 @@
 # launch only (network ports on, save-state autoload/autosave off): retroarch.cfg is never edited.
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
 #   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL /
-#   AG_EXCITEBIKE_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
+#   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
 #   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
 #   AG_60HZ=0 (leave the panel at 120 Hz), AG_RA_CFG (one more RetroArch config file, appended last)
 # Cores (SM8250): RetroArch and the players on 0-3, the LLM on 4-7, TTS on 6-7. Unpinned, RetroArch wandered onto
@@ -95,7 +99,7 @@ wait_llm() {
   msg "$1 ready."
 }
 
-# Skill levels by slow motion (tetris-model, tennis-model, ntennis-model, excitebike-model). $1: a human's think seconds for Hard,
+# Skill levels by slow motion (tetris-model, tennis-model, ntennis-model, excitebike-model, punchout-model). $1: a human's think seconds for Hard,
 # Harder, Hardest (Expert is real time): the game runs at 1/(THINK / that), clamped 1-20. No Easy: a game slow enough
 # that the model always keeps up is no contest to watch. $2, $3: the picker's title and lines. The start level:
 # AG_LEVEL (0-3), else picked on the screen while the model loads (picker.py), the last pick first, Hardest at first
@@ -168,6 +172,15 @@ case $GAME in
     # call every 1-1.5 s, overheated and missed it at 2.5-3.5 s, and were too cautious to qualify at 5 s or more.
     setup_levels "1 2 3" "AI PLAYS EXCITEBIKE (MODEL RIDES THE TURBO)" \
       "$AG_MODEL_LABEL takes about $THINK s to call turbo or cruise; each call|holds until the next. Too slow to ease off, the engine overheats;|too careful, it misses the qualifying time: game over." ;;
+  punchout-model)
+    pick_model "${AG_PUNCHOUT_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
+    export TL_CALIB="$ST/think_punchout_$AG_MODEL_LABEL.txt" AG_BULLET=1
+    case $AG_MODEL_LABEL in E4B) THINK=4.0 ;; *) THINK=2.7 ;; esac  # Excitebike's call times + a longer question: estimates
+    [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB")
+    # After a dodge Glass Joe stays open for a pummel 100 frames on (5-6 hits); later opponents close up sooner. A
+    # human's 0.5, 0.75, 1 s to see the opening and call it.
+    setup_levels "0.5 0.75 1" "AI PLAYS PUNCH-OUT!! (MODEL RUNS THE OFFENCE)" \
+      "Mac dodges by himself. $AG_MODEL_LABEL takes about $THINK s to call|pummel, body blows or wait when the opponent is open;|the game slows down for each call. Too late: the opening is gone." ;;
 esac
 
 # The panel at 60 Hz for the session (the Flip 2 runs 120): with autogamer-60hz.cfg RetroArch paces by vsync, not by
@@ -231,6 +244,7 @@ if [ -n "$MODEL_GAME" ]; then
     tennis-model) msg "The AI is pink. The model ($AG_MODEL_LABEL) is loading; it will aim every return. SELECT changes the level (game speed)." ;;
     ntennis-model) msg "The model ($AG_MODEL_LABEL) is loading; it will aim every return. SELECT changes the level (game speed)." ;;
     excitebike-model) msg "The model ($AG_MODEL_LABEL) is loading; it will run the engine. SELECT changes the level (game speed)." ;;
+    punchout-model) msg "The model ($AG_MODEL_LABEL) is loading; it will call the attacks. SELECT changes the level." ;;
   esac
   wait_llm "The model ($AG_MODEL_LABEL)"
   echo "ready" > /dev/shm/autogamer/hud.txt
@@ -249,6 +263,10 @@ case $GAME in
     python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
   excitebike-model)
     $P "$V/excitebike_llm.py" $FOREVER "$O/race.jsonl" > "$O/play.out" 2>&1 &
+    PIDS="$PIDS $!"
+    python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
+  punchout-model)
+    $P "$V/punchout_llm.py" $FOREVER "$O/fight.jsonl" > "$O/play.out" 2>&1 &
     PIDS="$PIDS $!"
     python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
   tennis-model)
