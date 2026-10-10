@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
     def press(i, btn):
         if "a" in btn: jump_hold[i] = 3
-        if jump_hold[i] > 0: jump_hold[i] -= 1; btn = sorted(set(btn) | {"a"})
+        if jump_hold[i] > 0: jump_hold[i] -= 1; btn = sorted((set(btn) | {"a"}) - {"down"})   # not a drop-through
         if btn != held[i]: pads[i].hold(btn); held[i] = btn
 
     try:

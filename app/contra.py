@@ -114,11 +114,11 @@ class State:
         return (EMPTY, FLOOR, H2O, SOLID)[(b >> (6 - 2 * ((h >> 4) & 3))) & 3]
 
 def hits(st, k, px, py, pose, t=0, v=None):
-    """does enemy k, t frames from now on its course (v: (vx, vy) a frame, else its RAM speed), touch a player at
-    (px, py) in this pose?"""
+    """does enemy k, t frames from now on its course (v: (vx, vy, ay) a frame, else its RAM speed), touch a player
+    at (px, py) in this pose? ay: its fall's pull (a mortar shot rises, then drops on you)"""
     dy, dx, h, w = BOX[pose][st.ecode(k)]
-    vx, vy = v if v else (st.evx(k), st.evy(k))
-    ex = st.ex(k) + vx * t; ey = st.ey(k) + vy * t
+    vx, vy, ay = v if v else (st.evx(k), st.evy(k), 0)
+    ex = st.ex(k) + vx * t; ey = st.ey(k) + vy * t + 0.5 * ay * t * t
     return 0 <= py - (ey + sb(dy)) < h and 0 <= px - (ex + sb(dx)) < w
 
 def read(ra):
@@ -162,12 +162,16 @@ class Soldier:
         f = st.frame(); seen = {}; vel = {}
         for k in st.slots():
             t, x, y = st.etype(k), st.ex(k), st.ey(k); seen[k] = (t, x, y, f)
-            vx, vy = st.evx(k), st.evy(k)
-            p = self.seen.get(k)
-            if (vx, vy) == (0, 0) and p and p[0] == t and 0 < (f - p[3]) % 256 <= 4:
-                n = (f - p[3]) % 256; ox, oy = self.vel.get(k, (0, 0))
+            vx, vy = st.evx(k), st.evy(k); ay = 0
+            p = self.seen.get(k); same = p and p[0] == t and 0 < (f - p[3]) % 256 <= 4
+            ox, oy, oa = self.vel.get(k, (0, 0, 0)) if same else (0, 0, 0)
+            if (vx, vy) == (0, 0) and same:
+                n = (f - p[3]) % 256
                 vx = 0.5 * ox + 0.5 * sb((x - p[1]) & 0xff) / n; vy = 0.5 * oy + 0.5 * sb((y - p[2]) & 0xff) / n
-            vel[k] = (vx, vy)
+            if same:                                           # the change in its fall speed: gravity
+                n = (f - p[3]) % 256; a = (vy - oy) / n
+                ay = 0.5 * oa + 0.5 * a if abs(a) < 0.5 else oa
+            vel[k] = (vx, vy, ay)
         self.seen, self.vel = seen, vel
 
     def first_hit(self, st, pose, path, bullets=True):
@@ -217,7 +221,7 @@ class Soldier:
         for k in st.slots():
             t = st.etype(k)
             if t in (0x00, 0x01) or st.ehp(k) == 0: continue
-            still = self.vel.get(k, (0, 0)) == (0, 0)
+            still = self.vel.get(k, (0, 0, 0))[:2] == (0, 0)
             if way and still and (st.ex(k) - px) * way < -24: continue
             if t == 0x02 and not 0 <= (st.ex(k) - px) * (way or self.face) < 100: continue
             if t == 0x03 and not self.pickup: continue          # a capsule: shoot it only to take what it carries
@@ -294,7 +298,8 @@ class Soldier:
                 c = self.climb_target(st); self.climb_x = None
                 if c:
                     d = 1 if c[0] > px + 3 else -1 if c[0] < px - 3 else 0
-                    if abs(c[0] - px) <= 14: up = True; self.climb_x = c[0]
+                    edge = d and st.bg(px + 8 * d, py + 0x10) == EMPTY and st.bg(px + 8 * d, py + 0x14) == EMPTY
+                    if abs(c[0] - px) <= 14 or edge: up = True; self.climb_x = c[0]   # under it, or from the edge
                 else: d = 0
             elif self.climb_x is not None:
                 d = 1 if self.climb_x > px + 2 else -1 if self.climb_x < px - 2 else 0
@@ -305,7 +310,10 @@ class Soldier:
         k = self.pick_target(st, d); self.target = k; aim = None
         if k is not None:
             aim, side = self.aim_at(st, k, grounded)
-            if aim == "up" and abs(st.ex(k) - px) > 5 and grounded: aim = None; d = side    # under it first
+            if st.vertical() and (d or self.climb_x is not None):  # the waterfall: the climb comes first, shoot on the way
+                if aim == "low": aim = "fwd"
+                if side != d: aim = None
+            elif aim == "up" and abs(st.ex(k) - px) > 5 and grounded: aim = None; d = side    # under it first
             elif aim in ("upfwd", "downfwd") and d == 0: d = side
             elif d == 0 and side != self.face: d = side          # turn round (a frame's step)
             self.face = d or self.face
@@ -321,6 +329,7 @@ class Soldier:
         if up and not jump and grounded: jump = True; self.note = "climb"
         # pits: jump over (on the ground, walking toward one)
         if grounded and d and not jump and self.pit_ahead(st, d): jump = True; self.note = "pit"
+        if jump and self.n - self.jump_t < 8: jump = False   # a jump is a press: let A go between them
         if jump: btn.add("a"); self.jump_t = self.n; self.jump_d = d or self.face
         if not grounded and self.n - self.jump_t < 60 and self.jump_d and self.note not in ("back",) and not st.vertical():
             d = d or self.jump_d                                # keep the jump's direction in the air
@@ -334,6 +343,7 @@ class Soldier:
         elif aim == "down" and not grounded: btn.add("down")
         elif aim == "low" and grounded: btn.add("down"); btn.discard("right"); btn.discard("left")
         if self.fire(k): btn.add("b")
+        if "a" in btn: btn.discard("down")                   # down + A on a floor drops through it
         return sorted(btn)
 
     def fire(self, k):
@@ -363,7 +373,7 @@ class Soldier:
             if name != "plan":
                 self.note = name; d = d2
                 if crouch: btn.add("down"); d = 0
-        if jump: btn.add("a"); self.jump_t = self.n
+        if jump and self.n - self.jump_t >= 8: btn.add("a"); self.jump_t = self.n
         elif low and d == 0 and grounded: btn.add("down")      # a low target takes crouching shots (and bullets miss)
         if d: btn.add("right" if d > 0 else "left")
         if self.fire(k): btn.add("b")
