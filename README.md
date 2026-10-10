@@ -74,7 +74,14 @@ Not yet tested: the 8 GB Flip 2 (E4B next to RetroArch), other handhelds, other 
 
 ## Install
 
-Download `autogamer-aarch64.tar.gz` from the latest [release](https://github.com/mercurious/autogamer/releases/latest)
+**Without ssh:** download [`Install-Autogamer.sh`](https://github.com/mercurious/autogamer/releases/latest/download/Install-Autogamer.sh)
+and put it in the handheld's ports folder (`roms/ports`, over the network share or on the SD card). Refresh the game
+list in EmulationStation and start **Install-Autogamer** from Ports, with WiFi on and the handheld on its charger. It
+downloads the latest release, checks it, installs it next to the models of other llamatalk apps (or where there is
+the most room) and downloads the models, full screen; a button closes it at the end. It then becomes
+**Update-Autogamer**: start that to update.
+
+**Over ssh:** download `autogamer-aarch64.tar.gz` from the latest [release](https://github.com/mercurious/autogamer/releases/latest)
 (`sha256sum -c autogamer-aarch64.tar.gz.sha256` checks it). Then, on the handheld (over ssh), in a directory with room,
 for example on the SD card:
 
