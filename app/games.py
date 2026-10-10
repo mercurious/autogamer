@@ -22,7 +22,7 @@ GAMES = [
          about=("The model picks where every piece goes, thinking while",
                 "it falls. The level sets how much slow motion it gets;",
                 "SELECT changes it during the game.")),
-    dict(id="ntennis-model", section="main", title="NES Tennis: the model picks the stroke", system="nes", core="fceumm",
+    dict(id="ntennis-model", section="main", title="NES Tennis: the model aims every return", system="nes", core="fceumm",
          dump="Tennis (Japan, USA)", crc=("d4d9e21a", "5f457c00"), model="e4b", tts=True,
          names=("Tennis (Japan, USA)*", "Tennis (USA)*", "Tennis.*", "Tennis (*"),
          about=("Forehand or backhand on every return, against the",
