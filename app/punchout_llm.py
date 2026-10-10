@@ -37,7 +37,7 @@ PUNCH = {0: {0x15: 36, 0x16: 58}, 1: {0x16: 33, 0x17: 39},
          12: {0x15: 23, 0x17: 20, 0x18: 20, 0x19: 28, 0x1B: 52}, 13: {0x16: 38, 0x17: 22}}
 EARLY, LATE = 29, 8          # the dodge window: frames before the impact (7, and a frame for the poll)
 FIRST = 12                   # dodge this many frames before the impact (or at once when later than that)
-SPREAD = 10                  # a punch can land up to this many frames after its fastest (Glass Joe: 36-44)
+SPREAD = {(0, 0x15): 9}      # how much later than its fastest a punch can land (Glass Joe's jab: 36-44; others 0-2)
 BLOCKED = 45                 # counters stop when this many frames pass without damage (it shows 20-30 after the jab)
 OPEN, PROBE = 30, 240        # standing this many frames: an offence turn; then none for this many
 REEL = 100                   # an opening after a dodge lasts at least this long (Glass Joe: a pummel 100 frames on landed)
@@ -98,13 +98,14 @@ def score(opp, z, h):
     return "%s, %s. Round %d, %d:%d%d. Mac health %d of 96, hearts %d, stars %d. %s health %d of 96." % (
         who, CIRCUIT[opp], max(z[0x06], 1), h[2], h[4], h[5], h[0x91], h[0x23] * 10 + h[0x24], h[0x42], who, h[0x98])
 
-def ofacts(opp, kind, z, h, arrive, rec, order):
+def ofacts(opp, kind, z, h, arrive, rec, order, now=None):
     """an offence turn: how he is open, when the call arrives"""
     who = NAMES[opp]
     lines = [score(opp, z, h),
              ("%s is reeling from your dodge." if kind == "reel" else "%s is standing, not punching.") % who,
              "Your call arrives about %.2f s from now." % (arrive / 60.0),
              "Your record when he is %s: %s." % ("reeling" if kind == "reel" else "standing", record_text(rec, order))]
+    if now: lines.append("Your standing call here is %s: Mac is doing it now; your answer is his call from now on." % TEXT[now])
     if h[0x42]: lines.append("You have %d star%s: lost when you are hit, and at the end of this round (%d:%d%d of 3:00 gone)." % (
         h[0x42], "" if h[0x42] == 1 else "s", h[2], h[4], h[5]))
     return "\n".join(lines + ["%s) %s" % ("ABCD"[i], TEXT[c]) for i, c in enumerate(order)])
@@ -140,7 +141,7 @@ if __name__ == "__main__":
     stop_t = time.time(); probe = 0
     turn = None        # the model's turn now on: {"kind" ("punch", "reel", "stand"), "f0", "box", "choice", ...}
     attack = None      # Mac's jabs: {"choice", "next", "at", "btn", "last" (damage seen), "ohp", "hits", "star"}
-    calls = {"open": None}     # the last answer: it holds while the model is busy
+    calls = {}         # (opponent, "reel" / "stand") -> the model's standing call there: Mac acts on it at once
     pending = []       # questions whose answers have not come yet
 
     def think_s():
@@ -159,13 +160,17 @@ if __name__ == "__main__":
     def busy(): return worker is not None and worker.is_alive()
 
     def open_turn(kind, z, h):
-        """an offence turn: bullet time and a question, or the last offence call when the model is busy"""
+        """an offence turn. With a standing call for this opponent and situation Mac acts on it at once, and the model
+        is asked (at full speed) whether to keep it; the first time, the game slows down and waits for the call."""
         global turn
-        turn = dict(kind=kind, f0=frames, key=(z[0x01], kind), choice=None, done=False)
-        records.setdefault(turn["key"], {})
-        if busy(): turn["choice"] = calls["open"]; return
-        choices = OFFENCE + (STAR if h[0x42] else ()); speed.set(True, SLOW); order = random.sample(choices, len(choices))
-        ask_turn(turn, ofacts(min(z[0x01], 13), kind, z, h, think_s() * 60 / SLOW, records[turn["key"]], order), order)
+        key = (z[0x01], kind); now = calls.get(key)
+        if now == "star" and not h[0x42]: now = "pummel"
+        turn = dict(kind=kind, f0=frames, key=key, choice=now, standing=now, done=now == "wait")
+        records.setdefault(key, {})
+        if busy(): return
+        choices = OFFENCE + (STAR if h[0x42] else ()); order = random.sample(choices, len(choices))
+        if not now: speed.set(True, SLOW)
+        ask_turn(turn, ofacts(min(z[0x01], 13), kind, z, h, think_s() * 60 / (1 if now else SLOW), records[key], order, now), order)
 
     def start_attack(c, h, star=False):
         global attack
@@ -199,14 +204,16 @@ if __name__ == "__main__":
                 mm = re.search(r"PICK\s*\(?([ABCD])\)?", b["ans"])
                 if mm and "ABCD".index(mm.group(1)) >= len(b["order"]): mm = None
                 pick = b["order"]["ABCD".index(mm.group(1))] if mm else kinds[0]
-                calls["open"] = pick; n += 1
+                calls[tn["key"]] = pick; n += 1                 # it stands for the next openings like this one
                 if fight: fight["calls"] += 1
                 at = frames - tn["f0"]
-                in_time = tn is turn and not tn["done"]
-                if in_time:                                    # the jabs start now (or Mac waits)
+                in_time = tn is turn and not tn["done"] and (attack is None or attack["choice"] != pick)
+                if tn.get("standing") and not in_time: pass     # Mac acted on the standing call; this one is for next time
+                elif in_time:                                  # the jabs start now (or Mac waits)
+                    if attack: end_attack(); tn["done"] = False   # the standing call's jabs, recorded; now the new one
                     tn["choice"] = pick; speed.set(False, SLOW)
                     if pick == "wait": tn["done"] = True; r = records[tn["key"]].setdefault("wait", dict(n=0)); r["n"] += 1
-                    else: start_attack(pick, h, star=pick == "star")
+                    else: start_attack(pick, h, star=pick == "star"); tn["started"] = True
                 else:
                     r = records[tn["key"]].setdefault(pick, dict(n=0)); r["n"] += 1; r["late"] = r.get("late", 0) + 1
                     if fight: fight["late"] += 1
@@ -254,7 +261,7 @@ if __name__ == "__main__":
                     if c in ("face", "body") and "punch_at" not in turn: turn["punch_at"] = k
                     if "dodge_at" in turn and k < turn["dodge_at"] + 4: btn = ["left"]
                     if "punch_at" in turn and k < turn["punch_at"] + 3: btn = ["up", "b"] if c == "face" else ["b"]
-                    end = max(land + SPREAD, turn.get("punch_at", -99) + 35)   # a jab's damage shows 20-30 frames on
+                    end = max(land + SPREAD.get(turn["key"], 3), turn.get("punch_at", -99) + 35)   # a jab's damage shows 20-30 frames on
                     if hp < turn["hp"] or k > end:                         # it landed, or it is over
                         res = ("hit" if hp < turn["hp"] else "star" if h[0x42] > turn["stars"] else
                                "landed" if h[0x98] < turn["ohp"] else "safe")
