@@ -134,16 +134,22 @@ def title(st, pad, mem):
     """the title (game routine 1, bank7): (the 30-lives code, checked every frame of it), START skips the logo's
     scroll, SELECT moves the cursor (22) to 2 PLAYER, START begins. mem: what has been done (a dict)"""
     z = st.z; now = time.time()
-    if now - mem.get("t", 0) < (0.1 if mem.get("down") or mem.get("code", 0) < 10 and KONAMI else 0.35): return
+    if now - mem.get("t", 0) < (0.1 if mem.get("down") or KONAMI and z[0x3f] < 10 and not z[0x24] else 0.35): return
     mem["t"] = now
     if mem.get("down"): pad.set(mem["down"], False); mem["down"] = None; return
     if z[0x18] != 1: return
-    if KONAMI and not z[0x24] and mem.get("code", 0) < 10:
-        mem["down"] = ["up", "up", "down", "down", "left", "right", "left", "right", "b", "a"][mem.get("code", 0)]
-        pad.set(mem["down"], True); mem["code"] = mem.get("code", 0) + 1; return
+    if KONAMI and not z[0x24] and z[0x3f] == 0xff and mem.get("retry", 0) < 3:   # a press went astray: type it again
+        ra.cmd("WRITE_CORE_MEMORY 3f 00", reply=False); mem["retry"] = mem.get("retry", 0) + 1; mem["code"] = None
+        print("title: code missed, again", flush=True); return
+    if KONAMI and not z[0x24] and z[0x3f] < 10:            # 3F: how many of the code's presses the game has seen
+        if mem.get("code") == z[0x3f] and now - mem.get("code_t", 0) < 1: return    # wait for the last to count
+        mem["down"] = ["up", "up", "down", "down", "left", "right", "left", "right", "b", "a"][z[0x3f]]
+        pad.set(mem["down"], True); mem["code"] = z[0x3f]; mem["code_t"] = now
+        return
+    if not mem.get("said"): print("title: code %s (3F=%02x), cursor %d" % ("on" if z[0x24] else "off", z[0x3f], z[0x22]), flush=True); mem["said"] = 1
     if z[0xfd]: mem["down"] = "start"                      # still scrolling in: START shows the menu
     elif z[0x22] != 1: mem["down"] = "select"              # the cursor to 2 PLAYER
-    else: mem["down"] = "start"; mem["code"] = 0           # go (a later title tries the code again)
+    else: mem["down"] = "start"                            # go
     pad.set(mem["down"], True)
 
 if __name__ == "__main__":
@@ -154,7 +160,7 @@ if __name__ == "__main__":
     t0 = time.time(); worker = None; thinks = []; pending = []; n = 0
     me = contra.Soldier(ME); me.pickup = False; stand = contra.Soldier(HUMAN) if STANDIN else None
     if stand: stand.goal = 0xc0                 # past the 2-player scroll point (0xb0)
-    held = [[], []]; jump_hold = [0, 0]; mem = {}; prev = None
+    held = [[], []]; jump_hold = [0, 0]; last_frame = [None, None]; mem = {}; prev = None
     role = None; role_t = time.time(); role_scr = 0; stage = None; rec = {}; lost = []
     item_said = set(); last_ask = 0; borrowed = 0; hist = load_hist(); hist_t = time.time()
 
@@ -187,10 +193,13 @@ if __name__ == "__main__":
             bump(role, secs=time.time() - role_t, screens=max(st.z[0x64] - role_scr, 0))
         role_t = time.time(); role_scr = st.z[0x64]
 
-    def press(i, btn):
+    def press(i, btn, frame):
+        """the soldier's buttons, one change a frame (the network remote reads one message a frame); A held 3 frames"""
         if "a" in btn: jump_hold[i] = 3
+        if frame == last_frame[i]: return
+        last_frame[i] = frame
         if jump_hold[i] > 0: jump_hold[i] -= 1; btn = sorted((set(btn) | {"a"}) - {"down"})   # not a drop-through
-        if btn != held[i]: pads[i].hold(btn); held[i] = btn
+        pads[i].nudge(btn); held[i] = sorted(pads[i].held)
 
     try:
         while time.time() - t0 < T:
@@ -205,7 +214,11 @@ if __name__ == "__main__":
                 elif st.z[0x18] != 2: title(st, pads[0], mem)
                 prev = st; time.sleep(0.01); continue
             if st.z[0x18] != 5: prev = st; time.sleep(0.02); continue
-            if not st.two(): prev = st; time.sleep(0.05); continue    # a 1-player game: not ours to join
+            if not st.two():                                         # a 1-player game: not ours to join
+                if time.time() - mem.get("solo", 0) > 30:
+                    mem["solo"] = time.time()
+                    ra.cmd("SHOW_MSG A 1-player game: the model joins 2-player games only (HOME, then start again).", reply=False)
+                prev = st; time.sleep(0.05); continue
 
             if time.time() - hist_t > 30 and st.playing():            # the record across games, now and then
                 close_role(st); save_hist(hist); hist_t = time.time()
@@ -269,8 +282,18 @@ if __name__ == "__main__":
             # the waterfall: a climb above 0x50 scrolls the screen and pushes P1 down; not while P1 is low on it
             me.ceiling = 0x50 if st.vertical() and st.alive(HUMAN) and st.y(HUMAN) > 0x90 else 0
             if item is None: me.pickup = False                    # a TAKE holds for the weapon it was about
-            press(ME, me.step(st))
-            if stand: press(HUMAN, stand.step(st))
+            press(ME, me.step(st), st.frame())
+            if stand: press(HUMAN, stand.step(st), st.frame())
+            if time.time() - mem.get("status", 0) > 0.5:          # what each soldier is doing, for a look from outside
+                mem["status"] = time.time()
+                try:
+                    with open("/dev/shm/autogamer/contra.tmp", "w") as f:
+                        for i, sd in ((ME, me), (HUMAN, stand)):
+                            if sd: f.write("P%d x %d y %d goal %d btn %s note %s target %s leap %s climb %s\n" % (
+                                i + 1, st.x(i), st.y(i), sd.goal, held[i], sd.note, sd.target, sd.leap, sd.climb_x))
+                        f.write("role %s pickup %s item %s\n" % (role, me.pickup, item))
+                    os.replace("/dev/shm/autogamer/contra.tmp", "/dev/shm/autogamer/contra.txt")
+                except OSError: pass
             prev = st
             time.sleep(0.002)
     finally:

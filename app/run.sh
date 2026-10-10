@@ -255,7 +255,7 @@ if [ -n "$MODEL_GAME" ]; then
     ntennis-model) msg "The model ($AG_MODEL_LABEL) is loading; it will choose every stroke. SELECT changes the level (game speed)." ;;
     excitebike-model) msg "The model ($AG_MODEL_LABEL) is loading; it will run the engine. SELECT changes the level (game speed)." ;;
     punchout-model) msg "The model ($AG_MODEL_LABEL) is loading; it will call the attacks. SELECT changes the level." ;;
-    contra-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will be Player 2. You are Player 1." ;;
+    contra-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will be Player 2. You are Player 1: hands off until the game picks 2 PLAYER." ;;
   esac
   wait_llm "The model ($AG_MODEL_LABEL)"
   echo "ready" > /dev/shm/autogamer/hud.txt

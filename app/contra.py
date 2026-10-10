@@ -52,6 +52,7 @@ JUMP_DY = [0, 0, -4, -8, -12, -15, -19, -22, -25, -28, -31, -33, -36, -38, -41, 
            -54, -55, -56, -57, -57, -58, -58, -59, -59, -59, -58, -58, -58, -57, -56, -55, -54, -53, -52, -51, -49, -47,
            -46, -44, -42, -39, -37, -34, -32, -29, -26, -23, -20, -17, -13, -10, -6, -2, 0]
 # base corridors: what to shoot first (lower first): soldiers at the front, then the wall's guns, then its core
+INSTANT = 10                 # crouching and diving act at once: only when a hit is this many frames off (it stops you)
 LOW_WALL = 110               # a base target this low on the screen takes crouching shots (a core at 112: yes; 104: standing)
 INDOOR_TARGETS = {0x15: 0, 0x16: 0, 0x18: 0, 0x17: 1, 0x13: 1, 0x14: 2, 0x10: 2}
 
@@ -152,9 +153,9 @@ class Soldier:
     def __init__(self, i):
         self.i = i; self.goal = 0x70; self.pickup = True; self.fire_t = 0; self.face = 1; self.note = ""
         self.jump_t = -99; self.n = 0; self.target = None; self.jump_d = 0
-        self.seen = {}; self.vel = {}
+        self.seen = {}; self.vel = {}   # slot -> (type, x, y, frame) last poll; slot -> (vx, vy, ay) a frame
         self.ceiling = 0             # the vertical level: never jump to rise above this screen y (0: no limit)
-        self.climb_x = None   # slot -> (type, x, y, frame) last poll; slot -> (vx, vy) a frame
+        self.climb_x = None; self.leap = False   # the ledge it jumps for; a jump over a pit or for a ledge
 
     def track(self, st):
         """each enemy's speed: its RAM speed, or what it moved since the last poll (rollers and others that move
@@ -189,17 +190,20 @@ class Soldier:
         """the safest move for the next H frames: (name, d, crouch, jump), the plan (walk d) when it is clear"""
         i = self.i; px, py = st.x(i), st.y(i); indoor = st.z[0x40] == 1
         if st.in_water(i):
-            if self.first_hit(st, WATER, lambda t: (px + d * t, py)) is None: return "plan", d, False, False
+            t = self.first_hit(st, WATER, lambda t: (px + d * t, py))
+            if t is None or t > INSTANT: return "plan", d, False, False
             return "dive", 0, True, False                  # crouching in water: out of reach of everything
         opts = [("plan", d, False, False), ("crouch", 0, True, False), ("jump", d, False, True),
                 ("back", -(d or self.face), False, False), ("on", d or self.face, False, False),
                 ("jump back", -(d or self.face), False, True)]
-        best = None
+        best = None; t_plan = None
         for name, dd, crouch, jump in opts:
             if jump and (self.n - self.jump_t < 6 or st.jumping(i)): continue
+            if crouch and t_plan is not None and t_plan > INSTANT: continue   # a crouch takes no time: not yet
             if crouch: t = self.first_hit(st, CROUCH, lambda t: (px, py), bullets=not indoor)
             elif jump: t = self.first_hit(st, JUMP, lambda t: (px + dd * t, py + JUMP_DY[min(t, len(JUMP_DY) - 1)]))
             else: t = self.first_hit(st, STAND, lambda t: (px + dd * t, py))
+            if name == "plan": t_plan = t
             if t is None: return name, dd, crouch, jump
             if best is None or t > best[0]: best = (t, name, dd, crouch, jump)
         return best[1:]
@@ -207,12 +211,24 @@ class Soldier:
     def pit_ahead(self, st, d):
         """walking d (+1/-1) leads off an edge with nothing below to land on"""
         i = self.i; px, py = st.x(i), st.y(i); feet = py + 0x10
+        if st.in_water(i) or feet >= 0xe0: return False     # swimming: no edge to fall from
         for look in (6, 12, 18):
             x = px + d * look
             if not 0 <= x < 256: return False
             if st.bg(x, feet) != EMPTY: continue
-            return not any(st.bg(x, yy) != EMPTY for yy in range(feet + 16, 0xe0, 8))
+            return not self.ground_below(st, x, feet)
         return False
+
+    def ground_below(self, st, x, y):
+        """something to land on below screen point (x, y) of a player: water at any depth, floor or solid above the
+        bottom 24 px (a landing that low is off the screen: the chasms of the jungle)"""
+        return any((b := st.bg(x, yy)) == H2O or b != EMPTY and yy < 0xc8 for yy in range(max(y + 0x10, 0), 0xe0, 8))
+
+    def nearest_ground(self, st, px, py):
+        """the nearest x (within 96 px) with something to land on below it"""
+        for off in sorted(range(-96, 97, 4), key=abs):
+            if 4 <= px + off < 252 and self.ground_below(st, px + off, py): return px + off + (4 if off > 0 else -4 if off < 0 else 0)
+        return None
 
     def pick_target(self, st, way=0):
         """the enemy to shoot: the nearest, ahead first. way: the direction it is going (+1/-1, 0 standing): a still
@@ -278,7 +294,7 @@ class Soldier:
 
     def step(self, st):
         """the buttons to hold this frame"""
-        i = self.i; self.n += 1; self.note = ""; self.track(st)
+        i = self.i; self.n += 1; self.f = st.frame(); self.note = ""; self.track(st)
         if not st.playing() or st.pstate(i) != 1 or st.over(i): return []   # never A when out: it takes a life
         if st.z[0x40] == 1: return self.step_indoor(st)
         px, py = st.x(i), st.y(i); grounded = not st.jumping(i)
@@ -310,12 +326,14 @@ class Soldier:
         k = self.pick_target(st, d); self.target = k; aim = None
         if k is not None:
             aim, side = self.aim_at(st, k, grounded)
-            if st.vertical() and (d or self.climb_x is not None):  # the waterfall: the climb comes first, shoot on the way
-                if aim == "low": aim = "fwd"
+            if d:                                              # on the way somewhere: shoot what lies that way
                 if side != d: aim = None
-            elif aim == "up" and abs(st.ex(k) - px) > 5 and grounded: aim = None; d = side    # under it first
-            elif aim in ("upfwd", "downfwd") and d == 0: d = side
-            elif d == 0 and side != self.face: d = side          # turn round (a frame's step)
+                elif aim == "up": aim = "upfwd"
+                elif aim == "low" and not st.vertical(): aim = "fwd" if abs(st.ey(k) - py) < 12 else aim
+            elif aim == "up" and abs(st.ex(k) - px) > 5 and grounded:       # arrived: under it if it is near
+                if abs(st.ex(k) - px) <= 24: aim = None; d = side
+                else: aim = "upfwd"; d = side
+            elif aim in ("upfwd", "downfwd") or side != self.face: d = side  # a diagonal walks; or turn round
             self.face = d or self.face
         else: self.face = d or self.face
 
@@ -331,8 +349,16 @@ class Soldier:
         if grounded and d and not jump and self.pit_ahead(st, d): jump = True; self.note = "pit"
         if jump and self.n - self.jump_t < 8: jump = False   # a jump is a press: let A go between them
         if jump: btn.add("a"); self.jump_t = self.n; self.jump_d = d or self.face
-        if not grounded and self.n - self.jump_t < 60 and self.jump_d and self.note not in ("back",) and not st.vertical():
-            d = d or self.jump_d                                # keep the jump's direction in the air
+        if jump: self.leap = self.note in ("pit", "climb")
+        if not grounded and self.n - self.jump_t < 60 and self.jump_d and not st.vertical():
+            if self.leap: d = self.jump_d                       # over a pit: no turning back in the air
+            elif self.note not in ("back",): d = d or self.jump_d
+
+        # falling with nothing below (dropping in after a life is lost, off an edge, a short jump): steer for ground
+        falling = not grounded or st.z[0xa4 + i] or st.bg(px, py + 0x10) == EMPTY
+        if falling and not st.in_water(i) and not self.ground_below(st, px, py):
+            tx = self.nearest_ground(st, px, py)
+            if tx is not None: d = 1 if tx > px else -1; self.note = "steer"
 
         # the pad: walking direction and aim
         side = "right" if (d or self.face) > 0 else "left"
@@ -344,11 +370,12 @@ class Soldier:
         elif aim == "low" and grounded: btn.add("down"); btn.discard("right"); btn.discard("left")
         if self.fire(k): btn.add("b")
         if "a" in btn: btn.discard("down")                   # down + A on a floor drops through it
+        if "left" in btn and "right" in btn: btn.discard("left" if (d or self.face) > 0 else "right")
         return sorted(btn)
 
     def fire(self, k):
-        """press and release B (the rifle shoots on each press), while there is something to shoot"""
-        return (k is not None or self.n % 30 < 4) and (self.n // 2) % 2 == 0
+        """press and release B (the rifle shoots on each press), 4 frames each, while there is something to shoot"""
+        return (k is not None or self.f % 32 < 8) and (self.f // 4) % 2 == 0
 
     def step_indoor(self, st):
         """a base corridor: the player stays at the front and shoots into the screen. Crouching is out of reach of

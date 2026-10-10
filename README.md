@@ -95,6 +95,7 @@ Measured on a 12 GB Flip 2 (ROCKNIX 20261001), CPU only:
 | Atari Tennis, the bot | won a set 6-3 against the game's computer |
 | Excitebike, E4B | 3.4-4.0 s per call; at Hardest it qualified on track 1 in 1:09.61 (the game's record was 1:16), 24 calls, about a third of the race on turbo, no overheat, one fall. Cruising only, the rider takes 72-91 s on the five tracks against qualifying times of 74-84 s: from track 3 on, the turbo decides |
 | Punch-Out!!, E4B, 8 GB Flip 2 | 4.1 s per call; at Hardest it beat Glass Joe and Von Kaiser and reached Piston Honda: 34 pummels landed 96 hits, 36 punches dodged and none taken, 16 of 42 calls too late for their opening |
+| Contra (co-op), E4B, 8 GB Flip 2 | work in progress, played only with the stand-in so far: 6-9 s per call; with the 30-lives code the pair cleared the Jungle and Base 1 and climbed into the Waterfall, and the model borrowed lives when Player 2 ran out. Known: the reflex soldiers can stall without dying (the Jungle's chasm on screen 9) |
 | frame pacing | the panel runs at 60 Hz during a game (put back after): 1 % of frames off the 16.7 ms cadence |
 | loading | E4B is 5 GB: the first start after a boot reads it from the SD card (a minute or more); the game waits, paused |
 

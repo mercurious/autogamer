@@ -22,6 +22,15 @@ class Pad:
         for b in list(self.held - set(buttons)): self.set(b, False)
         for b in set(buttons) - self.held: self.set(b, True)
 
+    def nudge(self, buttons, order=("a", "left", "right", "down", "up", "b")):
+        """one step toward exactly these buttons pressed: at most one message, the first difference in order (then
+        any other). RetroArch's network remote reads one message per user per frame and queues the rest, so a pad
+        that changes more than once a frame falls further and further behind; call this once a frame."""
+        want = set(buttons)
+        for b in list(order) + sorted(IDS):
+            if (b in want) != (b in self.held): self.set(b, b in want); return b
+        return None
+
     def tap(self, button, secs=0.15):
         self.set(button, True); time.sleep(secs); self.set(button, False)
 
