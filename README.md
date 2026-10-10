@@ -74,7 +74,9 @@ Not yet tested: the 8 GB Flip 2 (E4B next to RetroArch), other handhelds, other 
 
 ## Install
 
-On the handheld (over ssh), in a directory with room, for example on the SD card:
+Download `autogamer-aarch64.tar.gz` from the latest [release](https://github.com/mercurious/autogamer/releases/latest)
+(`sha256sum -c autogamer-aarch64.tar.gz.sha256` checks it). Then, on the handheld (over ssh), in a directory with room,
+for example on the SD card:
 
 ```sh
 tar xzf autogamer-aarch64.tar.gz && cd autogamer
@@ -89,6 +91,8 @@ Then refresh the game lists in EmulationStation and start **Autogamer** from Por
 other apps: `llamatalk/models.sh path` says where).
 
 To build a release: `build/build.sh` on an arm64 Linux machine with podman (it builds llamatalk at its pinned commit).
+`build/release.sh` builds what is on `main`, checks the tarball and uploads it as a draft GitHub release `v<VERSION>`
+(`DRY=1` builds and checks without uploading).
 
 ## ROMs
 

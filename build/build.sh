@@ -6,7 +6,7 @@
 # cache) instead of a fetch.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-W="$ROOT/build/work"; OUT="$ROOT/dist/autogamer"
+W="$ROOT/build/work"; OUT="$ROOT/dist/autogamer"; VER=$(cat "$ROOT/VERSION")
 LLAMATALK=https://github.com/mercurious/llamatalk    LLAMATALK_COMMIT=091fd0054909ac0e9a67473b7642f89f725ce854
 
 fetch() {   # fetch <url> <commit> <dir>: that one commit, nothing else
@@ -27,7 +27,8 @@ JOBS=${JOBS:-3} "$LT/build/build.sh"
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 cp -r "$LT/dist/llamatalk" "$ROOT/app" "$ROOT/ports" "$ROOT/test" "$ROOT/tools" "$OUT/"
-cp "$ROOT"/install.sh "$ROOT"/README.md "$ROOT"/LICENSE "$ROOT"/THIRD_PARTY.md "$OUT/"
+cp "$ROOT"/install.sh "$ROOT"/README.md "$ROOT"/LICENSE "$ROOT"/THIRD_PARTY.md "$ROOT"/VERSION "$OUT/"
+{ echo "autogamer $VER ($(git -C "$ROOT" rev-parse --short HEAD))"; cat "$LT/dist/llamatalk/BUILD.txt"; } > "$OUT/BUILD.txt"
 find "$OUT" -name __pycache__ -prune -exec rm -rf {} +
 chmod +x "$OUT"/install.sh "$OUT"/app/*.sh "$OUT"/test/*.sh
 tar -C "$ROOT/dist" -czf "$ROOT/dist/autogamer-aarch64.tar.gz" autogamer
