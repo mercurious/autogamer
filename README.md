@@ -1,7 +1,7 @@
 # Autogamer
 
-A small language model plays retro games on a handheld while you watch: it places Tetris pieces, picks tennis
-strokes, runs a motocross engine, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
+A small language model plays retro games on a handheld while you watch: it places Tetris pieces, aims tennis
+returns, runs a motocross engine, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
 no cloud and no account. The model is slow, so the games run in slow motion at a level you choose. That makes a
 contest: at Hard it keeps up, at Expert the game runs at real speed and the model falls behind.
 
@@ -20,7 +20,7 @@ One **Autogamer** entry under Ports opens a menu:
 | | game | who plays | what you watch |
 |---|---|---|---|
 | main | **Tetris: the model decides** (NES) | the model picks where every piece goes, thinking while it falls | whether it keeps the stack down; too late, and the piece drops low where it falls |
-| main | **NES Tennis: the model picks the stroke** | the model picks forehand or backhand for every return | points won and lost against the game's computer; too late, and it swings on impulse |
+| main | **NES Tennis: the model aims every return** | the player runs and swings; the model picks where each return lands, of the two ends it can reach inside the court | points won and lost against the game's computer; too late, and it hits on impulse, away from the computer |
 | main | **Excitebike: the model rides the turbo** | a reflex rider steers, jumps and lands; the model calls turbo or cruise, each call holding until the next | the race clock against the qualifying time; too slow to ease off, and the engine overheats |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
 | bonus | **Tennis (Atari 2600): the model aims** | the model aims every return | it seldom wins a point: what a small model cannot do yet |
@@ -62,7 +62,7 @@ Measured on a 12 GB Flip 2 (ROCKNIX 20261001), CPU only:
 |---|---|
 | Tetris, Gemma 4 E4B | 6.8 s per piece; at Hardest, a game lasted 7 minutes: 10 lines, NES level 3, 21 pieces placed by the model and 27 by the fallback when it was late |
 | Tetris, Gemma 4 E2B | 3.9 s per piece, with weaker choices |
-| NES Tennis, E4B | 3.7-3.9 s per stroke; a return leaves about 2 s of game time |
+| NES Tennis, E4B | 2.0-2.2 s per pick; a return leaves 1.7 s of game time at the computer's level 1, 1.1 s at 3. At Hardest against level 1 it led 16-2 (21 of 30 returns picked in time); at Hard against level 3, 2-5 in long rallies (29 of 33 in time). Without the model, in real time (5 minutes a level): 21-2, 16-4, 6-6, 4-9 and 1-22 against levels 1-5; at level 5 the computer rushes the net and volleys wide in 0.3 s |
 | Atari Tennis commentary, E2B | a point called 3.5-4 s after it ends, the winner right 10 times out of 10 |
 | Atari Tennis, the bot | won a set 6-3 against the game's computer |
 | Excitebike, E4B | 3.4-4.0 s per call; at Hardest it qualified on track 1 in 1:09.61 (the game's record was 1:16), 24 calls, about a third of the race on turbo, no overheat, one fall. Cruising only, the rider takes 72-91 s on the five tracks against qualifying times of 74-84 s: from track 3 on, the turbo decides |
