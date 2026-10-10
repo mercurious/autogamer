@@ -58,11 +58,12 @@ game over.
 In Punch-Out!! Mac dodges every punch by himself (a reflex loop that knows when each one lands). The model runs the
 offence: whenever the opponent is open, reeling after a dodge or standing off defence (from the bell on), the game
 drops into bullet time (slow motion at the level's ratio) and the model calls PUMMEL (rapid jabs to the face until
-they are blocked), BODY (rapid body blows) or WAIT, and while Mac has a star, STAR: the uppercut (START). Mac
-loses a star each time he is hit and all of them when the round ends, so when to spend one is the model's call too. Each question carries its record in that situation, tries, hits
-and blocks, which is how it learns where an opponent is open: Glass Joe takes 5-6 head hits after a dodge and 3 while
-he stands, and blocks every body blow while he stands. A call that comes after the opening has closed is wasted.
-Win and the next opponent comes out; lose and it is a rematch; a third loss is game over.
+they are blocked), BODY (rapid body blows) or WAIT, and while Mac has a star, STAR: the uppercut (START). Mac loses a
+star each time he is hit and all of them when the round ends, so when to spend one is the model's call too. Each
+question carries its record in that situation, tries, hits and blocks, which is how it learns where an opponent is
+open: Glass Joe takes 5-6 head hits after a dodge and 3 while he stands, and blocks every body blow while he stands.
+A call that comes after the opening has closed is wasted. Win and the next opponent comes out; lose and it is a
+rematch; a third loss is game over.
 
 ## What to expect
 
