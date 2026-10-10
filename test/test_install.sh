@@ -27,7 +27,7 @@ printf '#!/bin/sh\nexec firefox\n' > "$T/ports/Firefox.sh"
 [ ! -e "$T/ports/AI Plays Tetris.sh" ] && [ ! -e "$T/ports/AI Plays Super Mario Bros.sh" ]; ok $? "the lab's entries are gone"
 [ -f "$T/ports/Firefox.sh" ]; ok $? "other entries stay"
 grep -q "exec \"$T/app/app/autogamer.sh\"" "$E"; ok $? "the Autogamer entry runs app/autogamer.sh"
-[ "$(grep -c MISSING "$T/out1")" = 6 ]; ok $? "no ROMs: all six games say what to add"
+[ "$(grep -c MISSING "$T/out1")" = 9 ]; ok $? "no ROMs: all nine games say what to add"
 
 # 2. fresh device, --no-e4b: ./models with e2b and tts only
 fresh; "$T/app/install.sh" --no-e4b > "$T/out2" 2>&1; ok $? "fresh --no-e4b: install.sh runs"

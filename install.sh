@@ -1,7 +1,7 @@
 #!/bin/sh
 # Autogamer installer. Runs ON the handheld, from the unpacked release directory.
 #   ./install.sh [--no-e4b] [--no-models]      ./install.sh --uninstall
-#   --no-e4b     skip gemma-4-E4B (5.2 GB): Tetris, NES Tennis, Excitebike and Punch-Out!! then play with E2B, which
+#   --no-e4b     skip gemma-4-E4B (5.2 GB): Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B, which
 #                thinks faster and worse
 #   --no-models  skip the downloads (the models directory already has them)
 # The models go to llamatalk's shared models directory, which every app that bundles llamatalk uses (Retro Voice

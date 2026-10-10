@@ -20,6 +20,11 @@
 #                 (E4B if installed, AG_PUNCHOUT_MODEL) runs the offence: when the opponent is open it calls pummel,
 #                 body blows or wait, in bullet time (the game runs in real time and slows down for each call). Levels
 #                 by a human's 0.5, 0.75, 1 s to see the opening.
+#   contra-coop   Contra (fceumm), 2 players: you play Player 1 on the handheld, contra_llm.py plays Player 2 (a
+#                 reflex soldier from RAM, contra.py; RetroArch's network remote for user 2) and the model (E4B if
+#                 installed, AG_CONTRA_MODEL) makes its calls: cover, lead or hang back, take or leave a weapon,
+#                 borrow a life. Real time, no levels (you are playing too). AG_CT_KONAMI=1: the 30-lives code at the
+#                 title; AG_CT_STANDIN=1: a reflex soldier plays Player 1 as well (to watch without a human).
 #   tennis        Activision Tennis (Atari 2600, stella): play.py vs the CPU, narrate.py calls the match (E2B, Pocket TTS)
 #   tennis-model  Activision Tennis: the model aims every return (tennis_llm.py; E2B, AG_TENNIS_MODEL), play.py's reflex
 #                 loop runs to the ball. Slow-motion levels; a ball the model has not answered in time is missed.
@@ -33,7 +38,7 @@
 # launch only (network ports on, save-state autoload/autosave off): retroarch.cfg is never edited.
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
 #   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL /
-#   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
+#   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL / AG_CONTRA_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
 #   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
 #   AG_60HZ=0 (leave the panel at 120 Hz), AG_RA_CFG (one more RetroArch config file, appended last)
 # Cores (SM8250): RetroArch and the players on 0-3, the LLM on 4-7, TTS on 6-7. Unpinned, RetroArch wandered onto
@@ -181,6 +186,12 @@ case $GAME in
     # human's 0.5, 0.75, 1 s to see the opening and call it.
     setup_levels "0.5 0.75 1" "AI PLAYS PUNCH-OUT!! (MODEL RUNS THE OFFENCE)" \
       "Mac dodges by himself. $AG_MODEL_LABEL takes about $THINK s to call|pummel, body blows or wait when the opponent is open;|the game slows down for each call. Too late: the opening is gone." ;;
+  contra-coop)
+    pick_model "${AG_CONTRA_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
+    export TL_CALIB="$ST/think_contra_$AG_MODEL_LABEL.txt" AG_CT_KONAMI=${AG_CT_KONAMI:-0} AG_CT_STANDIN=${AG_CT_STANDIN:-0} \
+      AG_CT_RECORD="$ST/contra_record.json"   # what the model learns across games
+    case $AG_MODEL_LABEL in E4B) THINK=4.5 ;; *) THINK=3 ;; esac   # Punch-Out!!'s call times + a longer question: estimates
+    [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB"); export TL_THINK0=$THINK ;;
 esac
 
 # The panel at 60 Hz for the session (the Flip 2 runs 120): with autogamer-60hz.cfg RetroArch paces by vsync, not by
@@ -245,6 +256,7 @@ if [ -n "$MODEL_GAME" ]; then
     ntennis-model) msg "The model ($AG_MODEL_LABEL) is loading; it will aim every return. SELECT changes the level (game speed)." ;;
     excitebike-model) msg "The model ($AG_MODEL_LABEL) is loading; it will run the engine. SELECT changes the level (game speed)." ;;
     punchout-model) msg "The model ($AG_MODEL_LABEL) is loading; it will call the attacks. SELECT changes the level." ;;
+    contra-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will be Player 2. You are Player 1: hands off until the game picks 2 PLAYER." ;;
   esac
   wait_llm "The model ($AG_MODEL_LABEL)"
   echo "ready" > /dev/shm/autogamer/hud.txt
@@ -269,6 +281,9 @@ case $GAME in
     $P "$V/punchout_llm.py" $FOREVER "$O/fight.jsonl" > "$O/play.out" 2>&1 &
     PIDS="$PIDS $!"
     python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
+  contra-coop)
+    $P "$V/contra_llm.py" $FOREVER "$O/coop.jsonl" > "$O/play.out" 2>&1 &
+    PIDS="$PIDS $!" ;;
   tennis-model)
     $P "$V/tennis_llm.py" $FOREVER "$O/shots.jsonl" > "$O/play.out" 2>&1 &
     PIDS="$PIDS $!"
