@@ -187,7 +187,8 @@ case $GAME in
       "Mac dodges by himself. $AG_MODEL_LABEL takes about $THINK s to call|pummel, body blows or wait when the opponent is open;|the game slows down for each call. Too late: the opening is gone." ;;
   contra-coop)
     pick_model "${AG_CONTRA_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
-    export TL_CALIB="$ST/think_contra_$AG_MODEL_LABEL.txt" AG_CT_KONAMI=${AG_CT_KONAMI:-0} AG_CT_STANDIN=${AG_CT_STANDIN:-0}
+    export TL_CALIB="$ST/think_contra_$AG_MODEL_LABEL.txt" AG_CT_KONAMI=${AG_CT_KONAMI:-0} AG_CT_STANDIN=${AG_CT_STANDIN:-0} \
+      AG_CT_RECORD="$ST/contra_record.json"   # what the model learns across games
     case $AG_MODEL_LABEL in E4B) THINK=4.5 ;; *) THINK=3 ;; esac   # Punch-Out!!'s call times + a longer question: estimates
     [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB"); export TL_THINK0=$THINK ;;
 esac

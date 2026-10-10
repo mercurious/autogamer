@@ -75,7 +75,9 @@ LEAD (go ahead and clear the way) or REAR (hang back and watch behind); TAKE a w
 left for you); and when Player 2 is out of lives, BORROW one of yours (the game's own rule: a player who is out and
 presses A takes a life from the other) or SIT OUT. Each question carries how you are doing (lives, lives lost in the
 last minute, weapon, where you are) and its record with each call this stage: your lives and its own lost while the
-call stood, and the screens gained. It keeps to the game's two-player rules: it never stands at the left edge while
+call stood, and the screens gained. The record is also kept across games (`state/contra_record.json`, per stage and
+call, and apart for games with the stand-in), and each question gives it as rates: what one session learns about
+playing with you, the next is told. It keeps to the game's two-player rules: it never stands at the left edge while
 you push on (the screen would not scroll) and on the waterfall it does not climb past the scroll line while you are
 low on the screen (you would be pushed off the bottom). `AG_CT_KONAMI=1` enters the 30-lives code at the title;
 `AG_CT_STANDIN=1` has a reflex soldier play Player 1 too, to watch without a partner.

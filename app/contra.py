@@ -99,7 +99,8 @@ class State:
     def evx(self, k): return sb(self.e[0x50 + k]) + self.e[0x60 + k] / 256
     def evy(self, k): return sb(self.e[0x30 + k]) + self.e[0x40 + k] / 256
     def harmful(self, k):
-        return self.e[k] and not self.eflags(k) & 1 and self.ecode(k) != 0x0f
+        """can enemy k touch (kill) a player? (a weapon item touches to be taken)"""
+        return self.e[k] and self.etype(k) != 0x00 and not self.eflags(k) & 1 and self.ecode(k) != 0x0f
 
     def bg(self, x, y):
         """the background at screen point (x, y): EMPTY, FLOOR, H2O or SOLID (the game's get_bg_collision)"""
@@ -244,10 +245,10 @@ class Soldier:
         i = self.i; px, py = st.x(i), st.y(i); feet = py + 0x10
         if py - 59 < self.ceiling: return None
         best = None
-        for x in range(max(8, px - 48), min(248, px + 49), 4):
+        for x in range(8, 249, 4):
             for yy in range(feet - 56, feet - 11, 4):
                 if st.bg(x, yy) in (FLOOR, SOLID) and st.bg(x, yy - 8) == EMPTY and st.bg(x, yy - 20) != SOLID:
-                    score = yy + 0.6 * abs(x - px)
+                    score = yy + 0.4 * abs(x - px)
                     if best is None or score < best[0]: best = (score, x, yy)
                     break
         return best[1:] if best else None
@@ -282,9 +283,10 @@ class Soldier:
         # where to go: the goal, or a weapon item when it may take one
         goal = self.goal; k = self.item(st); up = False
         if k is not None and self.pickup:
-            if st.ey(k) < py - 20 and grounded:              # above: climb toward it, or leave it
-                cx, up = self.climb(st, st.ey(k))
-                if cx is not None: goal = st.ex(k) if up else cx
+            if st.ey(k) < py - 20:                           # above: climb toward it, or leave it
+                if grounded and not st.in_water(i):
+                    cx, up = self.climb(st, st.ey(k))
+                    if cx is not None: goal = st.ex(k) if up else cx
             elif st.ey(k) < py + 40: goal = st.ex(k)
         d = 1 if goal > px + 6 else -1 if goal < px - 6 else 0
         if st.vertical() and not up:                          # the waterfall: up, ledge by ledge

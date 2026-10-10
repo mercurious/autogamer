@@ -9,16 +9,19 @@
 # lives lost lately, weapon, where they are) and the model's record with each call this stage: P1's and its own lives
 # lost while it stood, and the screens gained. P2 never stands at the left edge while P1 pushes on: the screen
 # would not scroll (bank7). The game starts itself: 2 PLAYER (AG_CT_KONAMI=1 first enters the 30-lives code).
-# AG_CT_STANDIN=1: a reflex soldier plays P1 too (no human: to watch, and to test).
+# AG_CT_STANDIN=1: a reflex soldier plays P1 too (no human: to watch, and to test). AG_CT_RECORD: a JSON file that
+# keeps the record across games, per kind of partner (human or stand-in), stage and call; the question gives it as
+# rates (lives lost and screens gained a minute), so what one session learns, the next is told.
 # Usage: contra_llm.py SECONDS [log.jsonl]   env: TL_CALIB, TL_TTS, TL_THINK0, AG_MODEL_LABEL, VS_PORT,
-#   AG_CT_KONAMI, AG_CT_STANDIN
+#   AG_CT_KONAMI, AG_CT_STANDIN, AG_CT_RECORD
 import json, os, random, re, sys, threading, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from ra import RA; from pad import Pad; import llm, voice
 import contra
 LLM = "http://127.0.0.1:%s" % os.environ.get("VS_PORT", "8099"); TTS = os.environ.get("TL_TTS", "0") == "1"
 MODEL = os.environ.get("AG_MODEL_LABEL", "model"); CALIB = os.environ.get("TL_CALIB")
 THINK0 = float(os.environ.get("TL_THINK0", "4")); KONAMI = os.environ.get("AG_CT_KONAMI") == "1"
-STANDIN = os.environ.get("AG_CT_STANDIN") == "1"
+STANDIN = os.environ.get("AG_CT_STANDIN") == "1"; RECORD = os.environ.get("AG_CT_RECORD")
+PARTNER = "standin" if STANDIN else "human"      # the record across games is kept per kind of partner
 ME, HUMAN = 1, 0                                  # player indexes: the model is P2
 ROLES = ("cover", "lead", "rear")
 OFFSET = {"cover": -20, "lead": 56, "rear": -52}  # where P2 keeps itself from P1, screen px (outdoors, side-on)
@@ -63,7 +66,29 @@ def item_name(st, k):
     """what a weapon item or capsule carries (its attribute bits)"""
     return contra.ITEMS.get(st.eattr(k) & 0x07, "a weapon")
 
-def facts(st, rec, order, now, item, lost, t_now):
+def load_hist():
+    try: return json.load(open(RECORD))
+    except (TypeError, OSError, ValueError): return {}
+
+def save_hist(hist):
+    if not RECORD: return
+    try:
+        with open(RECORD + ".tmp", "w") as f: json.dump(hist, f)
+        os.replace(RECORD + ".tmp", RECORD)
+    except OSError: pass
+
+def hist_text(hist, stage):
+    """the record across past games with this kind of partner on this stage, per call, as rates"""
+    h = hist.get(PARTNER, {}).get(str(stage), {}); parts = []
+    for r in ROLES:
+        x = h.get(r)
+        if not x or x["secs"] < 30: continue
+        m = x["secs"] / 60
+        parts.append("%s %.0f min: player 1 lost %.1f lives a minute, you %.1f, %.1f screens a minute" % (
+            r.upper(), m, x["p1"] / m, x["p2"] / m, x["screens"] / m))
+    return "; ".join(parts)
+
+def facts(st, rec, order, now, item, lost, t_now, past=""):
     """the question: the stage, both players, the enemies, the record, the choices"""
     lv = st.level(); h, m = HUMAN, ME
     where = st.x(h) - st.x(m)
@@ -90,6 +115,7 @@ def facts(st, rec, order, now, item, lost, t_now):
         parts.append("%s never called" % r.upper() if not x else "%s %d calls, %.0f s, player 1 lost %d, you lost %d, "
                      "%d screens gained" % (r.upper(), x["n"], x["secs"], x["p1"], x["p2"], x["screens"]))
     lines.append("Your record this stage: %s." % "; ".join(parts))
+    if past: lines.append("Past games with %s on this stage: %s." % ("this partner" if PARTNER == "human" else "a bot partner", past))
     if now: lines.append("Your standing call: %s." % now.upper())
     return "\n".join(lines + ["%s) %s" % ("ABCDE"[i], c) for i, c in enumerate(order)])
 
@@ -130,7 +156,13 @@ if __name__ == "__main__":
     if stand: stand.goal = 0xc0                 # past the 2-player scroll point (0xb0)
     held = [[], []]; jump_hold = [0, 0]; mem = {}; prev = None
     role = None; role_t = time.time(); role_scr = 0; stage = None; rec = {}; lost = []
-    item_said = set(); last_ask = 0; borrowed = 0
+    item_said = set(); last_ask = 0; borrowed = 0; hist = load_hist(); hist_t = time.time()
+
+    def bump(key, **kw):
+        """add to the record across games: this partner, this stage, this call"""
+        if stage is None or key not in ROLES: return
+        r = hist.setdefault(PARTNER, {}).setdefault(str(stage), {}).setdefault(key, dict(secs=0.0, p1=0, p2=0, screens=0))
+        for k, v in kw.items(): r[k] += v
 
     def busy(): return worker is not None and worker.is_alive()
 
@@ -138,7 +170,7 @@ if __name__ == "__main__":
         global worker, last_ask
         keys, texts = options(st, item)
         box = dict(keys=keys, item=item, stage=st.level(), t=time.time()); pending.append(box); last_ask = time.time()
-        text = facts(st, rec, texts, role, item, lost, time.time())
+        text = facts(st, rec, texts, role, item, lost, time.time(), hist_text(hist, st.level()))
         def think(text=text, box=box):
             t1 = time.time()
             try: box["ans"] = ask(text)
@@ -152,6 +184,7 @@ if __name__ == "__main__":
         if role in ROLES:
             r = rec.setdefault(role, dict(n=0, secs=0.0, p1=0, p2=0, screens=0))
             r["secs"] += time.time() - role_t; r["screens"] += max(st.z[0x64] - role_scr, 0)
+            bump(role, secs=time.time() - role_t, screens=max(st.z[0x64] - role_scr, 0))
         role_t = time.time(); role_scr = st.z[0x64]
 
     def press(i, btn):
@@ -174,7 +207,10 @@ if __name__ == "__main__":
             if st.z[0x18] != 5: prev = st; time.sleep(0.02); continue
             if not st.two(): prev = st; time.sleep(0.05); continue    # a 1-player game: not ours to join
 
+            if time.time() - hist_t > 30 and st.playing():            # the record across games, now and then
+                close_role(st); save_hist(hist); hist_t = time.time()
             if stage != st.level():                                    # a new stage: a new record
+                if stage is not None: close_role(st)
                 if stage is not None: say("Stage clear!", show="%s: stage %d clear" % (MODEL, stage + 1))
                 stage = st.level(); rec = {}; item_said = set(); role_scr = st.z[0x64]
                 log(dict(stage=stage, name=contra.LEVELS[stage], lives=[st.lives(0), st.lives(1)]))
@@ -187,7 +223,11 @@ if __name__ == "__main__":
                     if prev.pstate(i) == 1 and st.pstate(i) == 2:
                         if i == HUMAN: lost.append(time.time())
                         if role in ROLES: rec.setdefault(role, dict(n=0, secs=0.0, p1=0, p2=0, screens=0))["p%d" % (i + 1)] += 1
+                        bump(role, **{"p%d" % (i + 1): 1})
+                        near = [(hex(prev.etype(k)), prev.ex(k) - prev.x(i), prev.ey(k) - prev.y(i)) for k in prev.slots()
+                                if abs(prev.ex(k) - prev.x(i)) < 40 and abs(prev.ey(k) - prev.y(i)) < 48]
                         log(dict(lost="P%d" % (i + 1), stage=stage, scr=st.z[0x64], role=role, lives=st.lives(i),
+                                 x=prev.x(i), y=prev.y(i), pose=prev.pose(i), near=near,
                                  note=(me if i == ME else stand).note if (i == ME or stand) else ""))
 
             # answers that came in: the new standing call
@@ -202,7 +242,9 @@ if __name__ == "__main__":
                 else:
                     me.pickup = pick == "take"
                     new = "cover" if pick == "take" else pick
-                    if pick == "take": spoken = SAY["take"] % item_name(st, item) if item is not None and item in st.slots() else None
+                    if pick == "take":
+                        if item is not None and item in st.slots() and item not in item_said:
+                            spoken = SAY["take"] % item_name(st, item); item_said.add(item)
                     elif item is not None and item in st.slots() and item not in item_said:
                         spoken = SAY["leave"] % item_name(st, item); item_said.add(item)
                     if new != role:
@@ -211,6 +253,7 @@ if __name__ == "__main__":
                 if spoken: say(spoken, show="%s: %s" % (MODEL, spoken))
                 log(dict(call=pick, parsed=bool(mm), think_s=round(b["dt"], 2), answer=b["ans"], stage=stage, scr=st.z[0x64]))
 
+            item_said = {k for k in item_said if k in st.slots() and st.etype(k) in (0x00, 0x03)}   # gone: forgotten
             # ask again whenever the model is free (at most every 2 s), at once when a weapon shows up
             item = me.item(st)
             if item is None:
@@ -232,5 +275,6 @@ if __name__ == "__main__":
             time.sleep(0.002)
     finally:
         for p in pads: p.release_all()
+        save_hist(hist)
         if LOG: LOG.close()
     print("%d calls in %.0f s, mean think %.1f s" % (n, time.time() - t0, sum(thinks) / max(len(thinks), 1)))
