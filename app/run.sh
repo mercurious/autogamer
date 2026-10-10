@@ -11,6 +11,10 @@
 #   ntennis-model NES Tennis (fceumm), singles against the game's computer (level AG_NT_CPU, default 1): the model
 #                 (E4B if installed, AG_NTENNIS_MODEL) picks forehand or backhand for each return (ntennis_llm.py); no
 #                 answer in time, an impulse stroke away from the computer. Slow-motion levels as for tetris-model.
+#   excitebike-model  Excitebike (fceumm), Selection A from track AG_EB_TRACK (1-5, default 1): excitebike_llm.py, a
+#                 reflex rider (wheelie over hurdles, landings) and the model (E4B if installed, AG_EXCITEBIKE_MODEL)
+#                 calling turbo or cruise, each call holding until the next: a turbo it is too slow to call off
+#                 overheats the engine. Slow-motion levels as for tetris-model, by a human's 1, 2, 3 s a call.
 #   tennis        Activision Tennis (Atari 2600, stella): play.py vs the CPU, narrate.py calls the match (E2B, Pocket TTS)
 #   tennis-model  Activision Tennis: the model aims every return (tennis_llm.py; E2B, AG_TENNIS_MODEL), play.py's reflex
 #                 loop runs to the ball. Slow-motion levels; a ball the model has not answered in time is missed.
@@ -23,7 +27,8 @@
 # RetroArch gets ROCKNIX's settings for the system (setsettings.sh, as runemu.sh does) plus autogamer.cfg for this
 # launch only (network ports on, save-state autoload/autosave off): retroarch.cfg is never edited.
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
-#   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL (gguf basename),
+#   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL /
+#   AG_EXCITEBIKE_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
 #   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
 #   AG_60HZ=0 (leave the panel at 120 Hz), AG_RA_CFG (one more RetroArch config file, appended last)
 # Cores (SM8250): RetroArch and the players on 0-3, the LLM on 4-7, TTS on 6-7. Unpinned, RetroArch wandered onto
@@ -89,7 +94,7 @@ wait_llm() {
   msg "$1 ready."
 }
 
-# Skill levels by slow motion (tetris-model, tennis-model, ntennis-model). $1: a human's think seconds for Hard,
+# Skill levels by slow motion (tetris-model, tennis-model, ntennis-model, excitebike-model). $1: a human's think seconds for Hard,
 # Harder, Hardest (Expert is real time): the game runs at 1/(THINK / that), clamped 1-20. No Easy: a game slow enough
 # that the model always keeps up is no contest to watch. $2, $3: the picker's title and lines. The start level:
 # AG_LEVEL (0-3), else picked on the screen while the model loads (picker.py), the last pick first, Hardest at first
@@ -152,6 +157,16 @@ case $GAME in
     export NT_CPU=${AG_NT_CPU:-1}                              # the game's own computer level, 1-5
     setup_levels "$(awk -v w="$W" 'BEGIN { printf "%.2g %.2g %.2g", w / 1.2, w, w / 0.85 }')" "AI PLAYS NES TENNIS (MODEL PICKS THE STROKE)" \
       "$AG_MODEL_LABEL takes about $THINK s to choose forehand or backhand.|A shot from the computer leaves about $W s to answer;|no answer in time: it swings on impulse, away from the computer." ;;
+  excitebike-model)
+    pick_model "${AG_EXCITEBIKE_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
+    export TL_CALIB="$ST/think_excitebike_$AG_MODEL_LABEL.txt" EB_TRACK=${AG_EB_TRACK:-1}
+    case $AG_MODEL_LABEL in E4B) THINK=3.7 ;; *) THINK=2.5 ;; esac  # E4B measured 3.4-4.0 s a call on car12, 2026-10-09; E2B a guess
+    [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB")
+    # Each call holds until the next, so the game seconds between calls set how finely it can run the turbo (heats 3.5
+    # a second, overheats at 32, cruising cools to 17): headless runs with a sensible caller qualified on track 3 with a
+    # call every 1-1.5 s, overheated and missed it at 2.5-3.5 s, and were too cautious to qualify at 5 s or more.
+    setup_levels "1 2 3" "AI PLAYS EXCITEBIKE (MODEL RIDES THE TURBO)" \
+      "$AG_MODEL_LABEL takes about $THINK s to call turbo or cruise; each call|holds until the next. Too slow to ease off, the engine overheats;|too careful, it misses the qualifying time: game over." ;;
 esac
 
 # The panel at 60 Hz for the session (the Flip 2 runs 120): with autogamer-60hz.cfg RetroArch paces by vsync, not by
@@ -214,6 +229,7 @@ if [ -n "$MODEL_GAME" ]; then
     tetris-model) msg "The model ($AG_MODEL_LABEL) is loading. It thinks ${TL_THINK0} s a piece; SELECT changes the level (game speed)." ;;
     tennis-model) msg "The AI is pink. The model ($AG_MODEL_LABEL) is loading; it will aim every return. SELECT changes the level (game speed)." ;;
     ntennis-model) msg "The model ($AG_MODEL_LABEL) is loading; it will choose every stroke. SELECT changes the level (game speed)." ;;
+    excitebike-model) msg "The model ($AG_MODEL_LABEL) is loading; it will run the engine. SELECT changes the level (game speed)." ;;
   esac
   wait_llm "The model ($AG_MODEL_LABEL)"
   echo "ready" > /dev/shm/autogamer/hud.txt
@@ -228,6 +244,10 @@ case $GAME in
     PIDS="$PIDS $!" ;;
   ntennis-model)
     $P "$V/ntennis_llm.py" $FOREVER "$O/shots.jsonl" > "$O/play.out" 2>&1 &
+    PIDS="$PIDS $!"
+    python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
+  excitebike-model)
+    $P "$V/excitebike_llm.py" $FOREVER "$O/race.jsonl" > "$O/play.out" 2>&1 &
     PIDS="$PIDS $!"
     python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
   tennis-model)
