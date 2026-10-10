@@ -9,8 +9,9 @@
 #                 session saves its own; seeded from measurements). RetroArch reads slowmotion_ratio only at start: a
 #                 change saves the state, restarts RetroArch, loads it.
 #   ntennis-model NES Tennis (fceumm), singles against the game's computer (level AG_NT_CPU, default 1): the model
-#                 (E4B if installed, AG_NTENNIS_MODEL) picks forehand or backhand for each return (ntennis_llm.py); no
-#                 answer in time, an impulse stroke away from the computer. Slow-motion levels as for tetris-model.
+#                 (E4B if installed, AG_NTENNIS_MODEL) picks where each return lands, of the two ends it can reach
+#                 inside the court (ntennis_llm.py); no answer in time, an impulse return away from the computer.
+#                 Slow-motion levels as for tetris-model.
 #   excitebike-model  Excitebike (fceumm), Selection A from track AG_EB_TRACK (1-5, default 1): excitebike_llm.py, a
 #                 reflex rider (wheelie over hurdles, landings) and the model (E4B if installed, AG_EXCITEBIKE_MODEL)
 #                 calling turbo or cruise, each call holding until the next: a turbo it is too slow to call off
@@ -155,12 +156,12 @@ case $GAME in
   ntennis-model)
     pick_model "${AG_NTENNIS_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
     export TL_CALIB="$ST/think_ntennis_$AG_MODEL_LABEL.txt" TN_WCALIB="$ST/window_ntennis.txt"
-    case $AG_MODEL_LABEL in E4B) THINK=4.4 ;; *) THINK=2.5 ;; esac    # tennis_llm's measured aim times, 2026-10-09
+    case $AG_MODEL_LABEL in E4B) THINK=2.2 ;; *) THINK=1.5 ;; esac    # E4B 1.9-2.2 s a pick on car12, 2026-10-10; E2B a guess
     [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB")
-    W=2.1; [ -s "$TN_WCALIB" ] && W=$(cat "$TN_WCALIB")      # game seconds from the computer's hit to ours
+    W=1.7; [ -s "$TN_WCALIB" ] && W=$(cat "$TN_WCALIB")      # game seconds from the computer's hit to ours (1.7 at its level 1, 1.1 at 3)
     export NT_CPU=${AG_NT_CPU:-1}                              # the game's own computer level, 1-5
-    setup_levels "$(awk -v w="$W" 'BEGIN { printf "%.2g %.2g %.2g", w / 1.2, w, w / 0.85 }')" "AI PLAYS NES TENNIS (MODEL PICKS THE STROKE)" \
-      "$AG_MODEL_LABEL takes about $THINK s to choose forehand or backhand.|A shot from the computer leaves about $W s to answer;|no answer in time: it swings on impulse, away from the computer." ;;
+    setup_levels "$(awk -v w="$W" 'BEGIN { printf "%.2g %.2g %.2g", w / 1.2, w, w / 0.85 }')" "AI PLAYS NES TENNIS (MODEL AIMS EVERY RETURN)" \
+      "$AG_MODEL_LABEL takes about $THINK s to choose where a return goes.|A shot from the computer leaves about $W s to answer;|no answer in time: it hits on impulse, away from the computer." ;;
   excitebike-model)
     pick_model "${AG_EXCITEBIKE_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
     export TL_CALIB="$ST/think_excitebike_$AG_MODEL_LABEL.txt" EB_TRACK=${AG_EB_TRACK:-1}
@@ -241,7 +242,7 @@ if [ -n "$MODEL_GAME" ]; then
     tennis) msg "The AI is pink. The commentator ($AG_MODEL_LABEL) is loading; the match starts when it is ready." ;;
     tetris-model) msg "The model ($AG_MODEL_LABEL) is loading. It thinks ${TL_THINK0} s a piece; SELECT changes the level (game speed)." ;;
     tennis-model) msg "The AI is pink. The model ($AG_MODEL_LABEL) is loading; it will aim every return. SELECT changes the level (game speed)." ;;
-    ntennis-model) msg "The model ($AG_MODEL_LABEL) is loading; it will choose every stroke. SELECT changes the level (game speed)." ;;
+    ntennis-model) msg "The model ($AG_MODEL_LABEL) is loading; it will aim every return. SELECT changes the level (game speed)." ;;
     excitebike-model) msg "The model ($AG_MODEL_LABEL) is loading; it will run the engine. SELECT changes the level (game speed)." ;;
     punchout-model) msg "The model ($AG_MODEL_LABEL) is loading; it will call the attacks. SELECT changes the level." ;;
   esac
