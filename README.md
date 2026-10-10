@@ -1,7 +1,7 @@
 # Autogamer
 
 A small language model plays retro games on a handheld while you watch: it places Tetris pieces, picks tennis
-strokes, runs a motocross engine, picks its moments to attack in a boxing ring, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
+strokes, runs a motocross engine, picks its moments to attack in a boxing ring, fights beside you as Player 2 in Contra, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
 no cloud and no account. The model is slow, so the games run in slow motion at a level you choose. That makes a
 contest: at Hard it keeps up, at Expert the game runs at real speed and the model falls behind.
 
@@ -23,6 +23,7 @@ One **Autogamer** entry under Ports opens a menu:
 | main | **NES Tennis: the model picks the stroke** | the model picks forehand or backhand for every return | points won and lost against the game's computer; too late, and it swings on impulse |
 | main | **Excitebike: the model rides the turbo** | a reflex rider steers, jumps and lands; the model calls turbo or cruise, each call holding until the next | the race clock against the qualifying time; too slow to ease off, and the engine overheats |
 | main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model calls pummel, body blows or wait whenever the opponent is open, in bullet time | the fight: win and the next opponent comes out; too late, and the opening is gone |
+| main | **Contra: the model is Player 2** (NES) | you play Player 1 on the handheld; a reflex soldier plays Player 2 and the model makes a partner's calls: cover you, lead or hang back, take a weapon or leave it for you, borrow a life | how far you get together; a careless partner takes your spread gun or drags the screen away from you |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
 | bonus | **Tennis (Atari 2600): the model aims** | the model aims every return | it seldom wins a point: what a small model cannot do yet |
 | bonus | **Tetris: the heuristic** | a hand-written placement rule, no model | full-speed Tetris to level 27 and beyond |
@@ -64,6 +65,20 @@ question carries its record in that situation, tries, hits and blocks, which is 
 open: Glass Joe takes 5-6 head hits after a dodge and 3 while he stands, and blocks every body blow while he stands.
 A call that comes after the opening has closed is wasted. Win and the next opponent comes out; lose and it is a
 rematch; a third loss is game over.
+
+Contra has no levels: you are playing too, so it runs in real time. The game starts itself with 2 players; you are
+Player 1 on the handheld's controls and the model is Player 2 (on RetroArch's network remote pad). A reflex soldier
+plays Player 2 from the game's memory: it dodges what the game's own collision boxes say would hit it, jumps pits,
+climbs the waterfall ledge by ledge, aims and fires; in the bases it shoots into the screen and crouches under
+bullets. The model makes the calls a partner makes, each standing until the next: COVER (stay right behind you),
+LEAD (go ahead and clear the way) or REAR (hang back and watch behind); TAKE a weapon on the screen (otherwise it is
+left for you); and when Player 2 is out of lives, BORROW one of yours (the game's own rule: a player who is out and
+presses A takes a life from the other) or SIT OUT. Each question carries how you are doing (lives, lives lost in the
+last minute, weapon, where you are) and its record with each call this stage: your lives and its own lost while the
+call stood, and the screens gained. It keeps to the game's two-player rules: it never stands at the left edge while
+you push on (the screen would not scroll) and on the waterfall it does not climb past the scroll line while you are
+low on the screen (you would be pushed off the bottom). `AG_CT_KONAMI=1` enters the 30-lives code at the title;
+`AG_CT_STANDIN=1` has a reflex soldier play Player 1 too, to watch without a partner.
 
 ## What to expect
 
@@ -109,7 +124,7 @@ for example on the SD card:
 ```sh
 tar xzf autogamer-aarch64.tar.gz && cd autogamer
 ./install.sh              # the models (if not already on the device), the Ports entry, and which ROMs it found
-./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike and Punch-Out!! then play with E2B)
+./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B)
 ```
 
 Then refresh the game lists in EmulationStation and start **Autogamer** from Ports. The models go to
@@ -134,6 +149,7 @@ Put your own copies in ROCKNIX's ROM folders, zipped or not (`.zip`, `.nes`, `.a
 | Super Mario Bros. (NES) | `roms/nes` | Super Mario Bros. (World) | `d445f698` without the header, `3337ec46` with it |
 | Excitebike (NES) | `roms/nes` | Excitebike (Nintendo, 1984) | `49aeb3a6` without the header, `6faa4584` with an old "DiskDude!" header |
 | Mike Tyson's Punch-Out!! (NES) | `roms/nes` | Mike Tyson's Punch-Out!! (Nintendo, 1987) | `2c818014` without the header, `3df8e170` with it |
+| Contra (NES) | `roms/nes` | Contra (Konami, 1988) | `f6035030` without the header, `c50a8304` with it |
 | Tennis (Atari 2600) | `roms/atari2600` | Activision, 1981 | `0a42515b` |
 
 The players read each game's memory at fixed addresses, which belong to one version of the game, so autogamer looks
@@ -189,5 +205,5 @@ seconds apart, each one visible on the screen, and a clock that keeps running wh
 ## Licence
 
 MIT, see `LICENSE`. The runtime it bundles and the models it downloads have their own licences: see
-`THIRD_PARTY.md`. Tetris, Tennis, Excitebike, Punch-Out!! and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
+`THIRD_PARTY.md`. Tetris, Tennis, Excitebike, Punch-Out!!, Contra and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
 with or endorsed by them.
