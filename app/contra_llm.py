@@ -213,6 +213,8 @@ if __name__ == "__main__":
                     pads[0].tap("start", 0.05); mem["demo"] = time.time()
                 elif st.z[0x18] != 2: title(st, pads[0], mem)
                 prev = st; time.sleep(0.01); continue
+            if mem.get("down"):                                      # the title's last press (START) outlives the
+                pads[0].set(mem["down"], False); mem["down"] = None  # title: held, P1's own START never registers
             if st.z[0x18] != 5: prev = st; time.sleep(0.02); continue
             if not st.two():                                         # a 1-player game: not ours to join
                 if time.time() - mem.get("solo", 0) > 30:
