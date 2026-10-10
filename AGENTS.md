@@ -38,3 +38,20 @@ Git has no global identity (`user.useConfigOnly`), so each repo needs its own `u
 and `user.email` (`git config --local`). The repo's own hooks in `.git/hooks` still run after
 the firewall. Never pass `--no-verify` or change `core.hooksPath`; only the maintainer may
 bypass a block.
+
+## Where work runs
+
+Agents work from the maintainer's daily driver: an Asahi Linux M1 with 8 GB of RAM and no fan. It is the
+smallest computer in this project. Even the 12 GB Flip 2 handheld (car12), with a fan on its Snapdragon, has more
+room. A build or a long job here chokes the machine the maintainer is using, so keep heavy work off it:
+
+- Compile on the maintainer's OCI Ampere nodes, the laptop's cloudmates. `etk-cloud` (4 OCPU, 24 GB) builds the
+  releases: bundle `main`, copy it to `~/llamatalk-builds/bundles/autogamer.bundle`, run
+  `~/llamatalk-builds/node_autogamer.sh` there, and copy the tarball back. On the laptop,
+  `PREBUILT=1 build/release.sh` only checks the tarball and uploads it. Never run `build/build.sh`, a podman or
+  docker build, or a full `build/release.sh` on the laptop.
+- The nodes belong to the maintainer, so nothing should stop an agent using them. If a step to a node is blocked
+  (a permission prompt, a denial, a failing ssh), stop and ask the maintainer to fix the block. Don't fall back to
+  building on the laptop.
+- Long or CPU-heavy jobs (emulator labs, benchmarks, model runs) also go on a node or a rig. Quick checks are
+  fine on the laptop (`test/test_games.py`, `py_compile`, `sh -n`).
