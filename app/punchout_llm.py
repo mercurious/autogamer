@@ -4,11 +4,12 @@
 # before the punch lands, against every punch mapped). The model decides when it is clear to attack: when the opponent
 # is open (reeling after a dodge, or standing off defence) the game drops into bullet time (RetroArch's slow motion at
 # the level's ratio) and the model calls PUMMEL (rapid jabs to the face until they are blocked), BODY (rapid body
-# blows) or WAIT, with its record in that situation: tries, hits, blocks. Against Glass Joe the face takes 5-6 hits
+# blows), WAIT, or while Mac has a star STAR (the uppercut, START; stars are lost when Mac is hit and when the round
+# ends, checked 2026-10-10), with its record in that situation: tries, hits, blocks. Against Glass Joe the face takes 5-6 hits
 # after a dodge and 3 while he stands, the body none while he stands; others guard differently. A call that comes
 # after the opening has closed is too late. While the model is still busy, its last call holds. Win and the next
 # opponent comes out; lose and it is a rematch; a third loss is game over, then a new game from Glass Joe (the game's
-# own rules). The reflex loop also throws the jabs (a star uppercut first when Mac has one), gets Mac up after a
+# own rules). The reflex loop also throws the punches the model called, gets Mac up after a
 # knockdown and presses START on the screens between rounds and fights.
 # RAM (NES CPU addresses; TASVideos' map, timing mapped 2026-10-10 on a headless fceumm): 00 1 in a fight (48 the
 # intro, 253 Mac lost, 254 Mac won), 01 opponent (0 Glass Joe .. 13 Tyson), 05 1 opponent down, 2 Mac down, 06 round,
@@ -41,15 +42,17 @@ BLOCKED = 45                 # counters stop when this many frames pass without 
 OPEN, PROBE = 30, 240        # standing this many frames: an offence turn; then none for this many
 REEL = 100                   # an opening after a dodge lasts at least this long (Glass Joe: a pummel 100 frames on landed)
 JAB = 10                     # a jab every this many frames, held 4
-OFFENCE = ("pummel", "body", "wait")
-SAY = {"body": "To the body!", "pummel": "Pummel him!", "wait": "Wait."}
-TEXT = {"body": "body blows", "pummel": "pummel his face (rapid jabs)", "wait": "wait"}
+OFFENCE = ("pummel", "body", "wait"); STAR = ("star",)    # the star uppercut is a choice while Mac has a star
+SAY = {"body": "To the body!", "pummel": "Pummel him!", "wait": "Wait.", "star": "Star punch!"}
+TEXT = {"body": "body blows", "pummel": "pummel his face (rapid jabs)", "wait": "wait",
+        "star": "star uppercut (spends a star), then jabs"}
 SYSTEM = ("You are Little Mac in Mike Tyson's Punch-Out!! (NES, 1987). Mac dodges punches by himself; you run the "
           "offence. When your opponent is open (reeling after a dodge, or standing) the game slows down and you call: "
-          "PUMMEL throws rapid jabs at his face until he blocks, BODY rapid body blows, WAIT holds back. Blocked punches "
-          "cost hearts; at zero Mac cannot punch. Knock him down to win. A call that arrives after the opening has closed "
-          "is wasted. Each turn you get the score, the situation, your record in it, and three lettered choices. Reply "
-          "exactly as: PICK <letter>")
+          "PUMMEL throws rapid jabs at his face until he blocks, BODY rapid body blows, WAIT holds back. While Mac has a "
+          "star (earned by some counters) you may also call STAR: a big uppercut. Mac loses a star each time he is hit "
+          "and all of them when the round ends. Blocked punches cost hearts; at zero Mac cannot punch. Knock him down to "
+          "win. A call that arrives after the opening has closed is wasted. Each turn you get the score, the situation, "
+          "your record in it, and lettered choices. Reply exactly as: PICK <letter>")
 
 def level():
     try:
@@ -101,8 +104,10 @@ def ofacts(opp, kind, z, h, arrive, rec, order):
     lines = [score(opp, z, h),
              ("%s is reeling from your dodge." if kind == "reel" else "%s is standing, not punching.") % who,
              "Your call arrives about %.2f s from now." % (arrive / 60.0),
-             "Your record when he is %s: %s." % ("reeling" if kind == "reel" else "standing", record_text(rec, OFFENCE))]
-    return "\n".join(lines + ["%s) %s" % ("ABC"[i], TEXT[c]) for i, c in enumerate(order)])
+             "Your record when he is %s: %s." % ("reeling" if kind == "reel" else "standing", record_text(rec, order))]
+    if h[0x42]: lines.append("You have %d star%s: lost when you are hit, and at the end of this round (%d:%d%d of 3:00 gone)." % (
+        h[0x42], "" if h[0x42] == 1 else "s", h[2], h[4], h[5]))
+    return "\n".join(lines + ["%s) %s" % ("ABCD"[i], TEXT[c]) for i, c in enumerate(order)])
 
 class Speed:
     """bullet time: RetroArch's slow motion (a toggle) on while a punch winds up. The frame counter's rate shows which
@@ -159,7 +164,7 @@ if __name__ == "__main__":
         turn = dict(kind=kind, f0=frames, key=(z[0x01], kind), choice=None, done=False)
         records.setdefault(turn["key"], {})
         if busy(): turn["choice"] = calls["open"]; return
-        speed.set(True, SLOW); order = random.sample(OFFENCE, 3)
+        choices = OFFENCE + (STAR if h[0x42] else ()); speed.set(True, SLOW); order = random.sample(choices, len(choices))
         ask_turn(turn, ofacts(min(z[0x01], 13), kind, z, h, think_s() * 60 / SLOW, records[turn["key"]], order), order)
 
     def start_attack(c, h, star=False):
@@ -191,8 +196,9 @@ if __name__ == "__main__":
             opp = min(z[0x01], 13); m = z[0x90]; hp = h[0x91]; btn = []
             for b in [b for b in pending if "ans" in b]:                  # answers that came in
                 pending.remove(b); tn = b["turn"]; kinds = OFFENCE
-                mm = re.search(r"PICK\s*\(?([ABC])\)?", b["ans"])
-                pick = b["order"]["ABC".index(mm.group(1))] if mm else kinds[0]
+                mm = re.search(r"PICK\s*\(?([ABCD])\)?", b["ans"])
+                if mm and "ABCD".index(mm.group(1)) >= len(b["order"]): mm = None
+                pick = b["order"]["ABCD".index(mm.group(1))] if mm else kinds[0]
                 calls["open"] = pick; n += 1
                 if fight: fight["calls"] += 1
                 at = frames - tn["f0"]
@@ -200,7 +206,7 @@ if __name__ == "__main__":
                 if in_time:                                    # the jabs start now (or Mac waits)
                     tn["choice"] = pick; speed.set(False, SLOW)
                     if pick == "wait": tn["done"] = True; r = records[tn["key"]].setdefault("wait", dict(n=0)); r["n"] += 1
-                    else: start_attack(pick, h)
+                    else: start_attack(pick, h, star=pick == "star")
                 else:
                     r = records[tn["key"]].setdefault(pick, dict(n=0)); r["n"] += 1; r["late"] = r.get("late", 0) + 1
                     if fight: fight["late"] += 1
@@ -261,8 +267,8 @@ if __name__ == "__main__":
                         if res == "safe": open_turn("reel", z, h)                   # he is open: the model's turn
                 elif turn and turn["kind"] != "punch" and not turn["done"]:
                     k = frames - turn["f0"]
-                    if turn["choice"] in ("pummel", "body") and attack is None and "started" not in turn:
-                        turn["started"] = True; start_attack(turn["choice"], h)
+                    if turn["choice"] in ("pummel", "body", "star") and attack is None and "started" not in turn:
+                        turn["started"] = True; start_attack(turn["choice"], h, star=turn["choice"] == "star")
                     if attack is None and k > (REEL if turn["kind"] == "reel" else OPEN * 3):   # nothing came of it
                         turn["done"] = True; speed.set(False, SLOW)
                 if attack:                                  # Mac's jabs: until they stop landing
@@ -272,7 +278,7 @@ if __name__ == "__main__":
                         if frames >= attack["next"]:
                             star = attack["star"] and h[0x42] > 0; attack["star"] = False
                             hand = ["b"] if attack["hand"] % 2 == 0 else ["a"]; attack["hand"] += 1
-                            attack["btn"] = ["start"] if star else (["up"] + hand if attack["choice"] == "pummel" else hand)
+                            attack["btn"] = ["start"] if star else (["up"] + hand if attack["choice"] in ("pummel", "star") else hand)
                             attack["at"] = frames; attack["next"] = frames + JAB
                         if frames < attack["at"] + 4: btn = attack["btn"]
                 if m not in PUNCH.get(opp, {}) and attack is None and (turn is None or turn["done"]):
