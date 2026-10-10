@@ -5,12 +5,15 @@
 # run.sh starts it again at the new speed and loads the state: RetroArch reads slowmotion_ratio only at start. run.sh
 # writes RUN/levels ("NAME RATIO HUMAN_S" a line), RUN/level (the index) and TL_MENU_TITLE/TL_MENU_INFO for the
 # menu. After every start this turns slow motion on (a toggle, ignored while paused) and announces the level.
-# NES Tetris also gets SELECT (it toggles the next-piece box): harmless here.
+# NES Tetris also gets SELECT (it toggles the next-piece box): harmless here. So does Punch-Out!! (between rounds it
+# refills some of Mac's health, once a fight). AG_BULLET=1: the player turns slow motion on for each call itself
+# (bullet time).
 # Usage: level.py RUN
 import glob, os, select, signal, struct, subprocess, sys, threading, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE); from ra import RA; import voice
 from home import pads, EV_KEY, BTN_MODE
 RUN = sys.argv[1]; BTN_SELECT = 314; TTS = os.environ.get("TL_TTS", "0") == "1"
+BULLET = os.environ.get("AG_BULLET") == "1"     # Punch-Out!!: slow motion only while the model decides
 WORDS = {2: "twice as slow", 3: "three times slower", 4: "four times slower", 5: "five times slower", 6: "six times slower",
          7: "seven times slower", 8: "eight times slower", 9: "nine times slower", 10: "ten times slower",
          11: "eleven times slower", 12: "twelve times slower"}
@@ -23,14 +26,18 @@ def ra_pid():
     except (IndexError, ValueError): return None
 
 def apply():
-    """RetroArch has just started (or the game just began): slow motion on, say the level."""
+    """RetroArch has just started (or the game just began): slow motion on (unless BULLET), say the level."""
     t = time.time()
     while "PLAYING" not in (ra.cmd("GET_STATUS") or ""):
         if time.time() - t > 120: return
         time.sleep(0.3)
     name, r, h = levels()[current()]; r = float(r)
-    if r > 1: ra.cmd("SLOWMOTION", reply=False)
-    if r > 1:
+    if r > 1 and BULLET:                                  # the player turns slow motion on and off itself
+        said = "%s. A human's %s seconds to decide: for each call, the game runs %s." % (
+            name, h, WORDS.get(round(r), "%.0f times slower" % r))
+        show = "%s: bullet time at 1/%.1f for each call (a human's %s s to decide)" % (name, r, h)
+    elif r > 1:
+        ra.cmd("SLOWMOTION", reply=False)
         said = "%s. %s, the game runs %s." % (name, "A human's second to think" if h == "1" else "A human's %s seconds to think" % h,
                                              WORDS.get(round(r), "%.0f times slower" % r) if abs(r - round(r)) < 0.25 else "%.1f times slower" % r)
         show = "%s: the model gets a human's %s s to think, so the game runs at 1/%.1f speed" % (name, h, r)
