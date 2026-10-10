@@ -1,0 +1,13 @@
+build/work/
+dist/
+__pycache__/
+logs/
+state/
+models/
+# never: games, saves, captures
+*.nes
+*.a26
+*.zip
+*.7z
+*.state*
+*.srm
