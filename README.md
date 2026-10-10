@@ -75,10 +75,11 @@ Measured on a 12 GB Flip 2 (ROCKNIX 20261001), CPU only:
 | Atari Tennis commentary, E2B | a point called 3.5-4 s after it ends, the winner right 10 times out of 10 |
 | Atari Tennis, the bot | won a set 6-3 against the game's computer |
 | Excitebike, E4B | 3.4-4.0 s per call; at Hardest it qualified on track 1 in 1:09.61 (the game's record was 1:16), 24 calls, about a third of the race on turbo, no overheat, one fall. Cruising only, the rider takes 72-91 s on the five tracks against qualifying times of 74-84 s: from track 3 on, the turbo decides |
+| Punch-Out!!, E4B, 8 GB Flip 2 | 4.1 s per call; at Hardest it beat Glass Joe and Von Kaiser and reached Piston Honda: 34 pummels landed 96 hits, 36 punches dodged and none taken, 16 of 42 calls too late for their opening |
 | frame pacing | the panel runs at 60 Hz during a game (put back after): 1 % of frames off the 16.7 ms cadence |
 | loading | E4B is 5 GB: the first start after a boot reads it from the SD card (a minute or more); the game waits, paused |
 
-Not yet tested: the 8 GB Flip 2 (E4B next to RetroArch), other handhelds, other ROCKNIX releases.
+Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with E4B next to RetroArch), other handhelds, other ROCKNIX releases.
 
 ## Requirements
 
