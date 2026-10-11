@@ -275,7 +275,9 @@ class Soldier:
     def fly(self, st, x, y, way, vy=0.0, t0=None):
         """where a player in the air at screen (x, y), steering way (ways()), comes down: (frames, x, feet), or None
         if it falls off the bottom. t0: frames into a jump (its course is JUMP_DY), else it falls from speed vy. The
-        x it reaches stops at SCROLL_X while the other player blocks the scroll (dragged left as the screen goes)."""
+        x it reaches stops at SCROLL_X while the other player blocks the scroll (dragged left as the screen goes).
+        (The other player's scroll drags this one left on the screen, but the ground with it: none of the flight's
+        course changes.)"""
         i = self.i; o = 1 - i; ox = st.x(o); v1, k, v2 = way
         both = st.two() and not st.over(o) and not st.over(i) and not st.vertical()
         y0 = y - JUMP_DY[t0] if t0 is not None and t0 < len(JUMP_DY) else None
@@ -321,7 +323,9 @@ class Soldier:
         """walking d toward goal, with a deadly drop ahead: ("jump"), ("wait") at the edge, or None (go on)"""
         i = self.i; px, py = st.x(i), st.y(i)
         e = self.edge(st, d)
-        if e is None or self.fly_any(st, px + d * e, py, d, L=d)[0] is not None: return None   # no drop, or lands below
+        if e is None: return None                                               # no drop
+        ln = self.fly(st, px + d * e, py, (d, None, None))                      # walking off lands below, going on as
+        if ln and min(self.ledge_from(st, ln[1], ln[2], dd) for dd in (1, -1)) >= 3: return None   # it walks
         ex = px + d * e
         if (goal - ex) * d <= 8 or d < 0: return "wait" if e <= 7 else None    # the goal is this side of the gap, or
                                                                                 # back (the screen never scrolls back:
@@ -419,6 +423,7 @@ class Soldier:
         i = self.i; self.n += 1; self.f = st.frame(); self.note = ""; self.track(st)
         last = self.last; self.last = (self.f, st.y(i))
         if st.pstate(i) != 1: self.jump_f = None                            # dead or dropping in: a new course
+
         if not st.playing() or st.pstate(i) != 1 or st.over(i): return []   # never A when out: it takes a life
         if st.z[0x40] == 1: return self.step_indoor(st)
         px, py = st.x(i), st.y(i); grounded = not st.jumping(i)
