@@ -10,8 +10,8 @@ This repository holds its own code (MIT, see `LICENSE`). A release tarball built
 
 The installer downloads the models from Hugging Face (`llamatalk/models.txt`); none are redistributed here. Each has
 its own licence or terms of use on its model card, which you accept by downloading it: Gemma 4 E2B and E4B
-(`google/gemma-4-E2B-it-qat-q4_0-gguf`, `google/gemma-4-E4B-it-qat-q4_0-gguf`) and Pocket TTS
-(`Serveurperso/pocket-tts-GGUF`).
+(`google/gemma-4-E2B-it-qat-q4_0-gguf`, `google/gemma-4-E4B-it-qat-q4_0-gguf`), Pocket TTS
+(`Serveurperso/pocket-tts-GGUF`) and Qwen3-ASR-0.6B (`ggml-org/Qwen3-ASR-0.6B-GGUF`).
 
 ## What it uses but does not bring
 

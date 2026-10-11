@@ -23,7 +23,7 @@ One **Autogamer** entry under Ports opens a menu:
 | main | **NES Tennis: the model aims every return** | the player runs and swings; the model picks where each return lands, of the two ends it can reach inside the court | points won and lost against the game's computer; too late, and it hits on impulse, away from the computer |
 | main | **Excitebike: the model rides the turbo** | a reflex rider steers, jumps and lands; the model calls turbo or cruise, each call holding until the next | the race clock against the qualifying time; too slow to ease off, and the engine overheats |
 | main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model calls pummel, body blows or wait whenever the opponent is open, in bullet time | the fight: win and the next opponent comes out; too late, and the opening is gone |
-| main | **Contra: the model is Player 2** (NES) | you play Player 1 on the handheld; a reflex soldier plays Player 2 and the model makes a partner's calls: cover you, lead or hang back, take a weapon or leave it for you, borrow a life | how far you get together; a careless partner takes your spread gun or drags the screen away from you |
+| main | **Contra: the model is Player 2** (NES) | you play Player 1 on the handheld; a reflex soldier plays Player 2 and the model makes a partner's calls: cover you, lead or hang back, take a weapon or leave it for you, borrow a life. Hold R1 and tell it what to do | how far you get together; a careless partner takes your spread gun or drags the screen away from you |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
 | bonus | **Tennis (Atari 2600): the model aims** | the model aims every return | it seldom wins a point: what a small model cannot do yet |
 | bonus | **Tetris: the heuristic** | a hand-written placement rule, no model | full-speed Tetris to level 27 and beyond |
@@ -70,7 +70,9 @@ Contra has no levels: you are playing too, so it runs in real time. The game sta
 Player 1 on the handheld's controls and the model is Player 2 (on RetroArch's network remote pad). A reflex soldier
 plays Player 2 from the game's memory: it dodges what the game's own collision boxes say would hit it, jumps pits,
 climbs the waterfall ledge by ledge, aims and fires; in the bases it shoots into the screen and crouches under
-bullets. The model makes the calls a partner makes, each standing until the next: COVER (stay right behind you),
+bullets. It plans each jump over a gap with the game's own physics (the arc, the way a jump keeps the last
+LEFT/RIGHT pressed, the two-player scroll stop) and jumps only when it lands on the far side; otherwise it waits at
+the edge or backs up for a run-up, and three jumps in one spot back it off for a moment. The model makes the calls a partner makes, each standing until the next: COVER (stay right behind you),
 LEAD (go ahead and clear the way) or REAR (hang back and watch behind); TAKE a weapon on the screen (otherwise it is
 left for you); and when Player 2 is out of lives, BORROW one of yours (the game's own rule: a player who is out and
 presses A takes a life from the other) or SIT OUT. Each question carries how you are doing (lives, lives lost in the
@@ -81,6 +83,26 @@ playing with you, the next is told. It keeps to the game's two-player rules: it 
 you push on (the screen would not scroll) and on the waterfall it does not climb past the scroll line while you are
 low on the screen (you would be pushed off the bottom). `AG_CT_KONAMI=1` enters the 30-lives code at the title;
 `AG_CT_STANDIN=1` has a reflex soldier play Player 1 too, to watch without a partner.
+
+**Talk to Player 2.** Hold **R1**, say it, let go (the game's sound dips while you hold it). Player 2 answers out
+loud and the screen shows what it heard:
+
+| say | Player 2 |
+|---|---|
+| "cover me", "stay with me", "follow me" | COVER: right behind you |
+| "you first", "go ahead", "take point" | LEAD: goes ahead |
+| "hang back", "watch our six" | REAR: hangs back |
+| "hold up", "wait", "stop" ... then "go" | stays where it is, then goes back to what it was doing |
+| "grab the spread", "get it", "it's yours" | takes the weapon on the screen (or the next one) |
+| "leave it", "that's mine" | leaves the weapon for you |
+| "don't borrow my lives" / "take a life" | never borrows a life / borrows one now if it is out |
+| "your call" | the model makes the calls again |
+
+Your order stands until you change it; the model's calls of that kind wait. Anything else ("nice shot!", "is that a
+sniper up there?") goes to the model with a short question, and it answers in a few words, 7-10 s later on E4B; it
+may change its call to answer you. Speech recognition is Qwen3-ASR-0.6B, on the device (about 0.5-2 s a phrase while
+the game runs). It needs a microphone: the Flip 2's own where its device tree powers it, else a USB-C, Bluetooth or
+headset mic. `AG_TALK=0` turns it off.
 
 ## What to expect
 
@@ -95,7 +117,7 @@ Measured on a 12 GB Flip 2 (ROCKNIX 20261001), CPU only:
 | Atari Tennis, the bot | won a set 6-3 against the game's computer |
 | Excitebike, E4B | 3.4-4.0 s per call; at Hardest it qualified on track 1 in 1:09.61 (the game's record was 1:16), 24 calls, about a third of the race on turbo, no overheat, one fall. Cruising only, the rider takes 72-91 s on the five tracks against qualifying times of 74-84 s: from track 3 on, the turbo decides |
 | Punch-Out!!, E4B, 8 GB Flip 2 | 4.1 s per call; at Hardest it beat Glass Joe and Von Kaiser and reached Piston Honda: 34 pummels landed 96 hits, 36 punches dodged and none taken, 16 of 42 calls too late for their opening |
-| Contra (co-op), E4B, 8 GB Flip 2 | work in progress, played only with the stand-in so far: 6-9 s per call; with the 30-lives code the pair cleared the Jungle and Base 1 and climbed into the Waterfall, and the model borrowed lives when Player 2 ran out. Known: the reflex soldiers can stall without dying (the Jungle's chasm on screen 9) |
+| Contra (co-op), E4B, 12 GB Flip 2 | played with a person on Player 1: 6-9 s per call. With the stand-in and the 30-lives code: Jungle screens 6 to 12 with no falls (before the jump planner, Player 2 lost most of its lives to the gaps of screens 7 and 9, and looped at 9). Known: at the Jungle's boss wall both soldiers still take hits |
 | frame pacing | the panel runs at 60 Hz during a game (put back after): 1 % of frames off the 16.7 ms cadence |
 | loading | E4B is 5 GB: the first start after a boot reads it from the SD card (a minute or more); the game waits, paused |
 
@@ -107,8 +129,9 @@ Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with 
   wlr-randr), RetroArch with the **fceumm** (NES) and **stella** (Atari 2600) cores, and Python 3: all part of
   ROCKNIX. Other SM8250 handhelds will likely work; other chips need other core numbers (`AG_RA_CPUS`).
 - 12 GB of RAM tested; 8 GB untested.
-- Storage: 3.7 GB for the models (8.8 GB with E4B, `--no-e4b` to skip it), unless another llamatalk app already has
-  them; about 17 MB for the programs.
+- Storage: 4.7 GB for the models (9.8 GB with E4B, `--no-e4b` to skip it; `--no-talk` skips the 1 GB of speech
+  recognition), unless another llamatalk app already has them; about 17 MB for the programs.
+- For talking to Contra's Player 2: a microphone (see above).
 - Optional: MangoHud, for the bar across the top (fps, frame times, the model at work).
 
 ## Install
@@ -128,11 +151,12 @@ for example on the SD card:
 tar xzf autogamer-aarch64.tar.gz && cd autogamer
 ./install.sh              # the models (if not already on the device), the Ports entry, and which ROMs it found
 ./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B)
+./install.sh --no-talk    # without speech recognition (no talking to Contra's Player 2)
 ```
 
 Then refresh the game lists in EmulationStation and start **Autogamer** from Ports. The models go to
 [llamatalk](https://github.com/mercurious/llamatalk)'s shared models directory: with
-[Retro Voice Chat](https://github.com/mercurious/retro-voice-chat) installed, only E4B is downloaded.
+[Retro Voice Chat](https://github.com/mercurious/retro-voice-chat) installed, only E4B is downloaded (it has the speech recognition too).
 `./install.sh --uninstall` removes the Ports entry; delete the directory to remove the rest (the models stay for
 other apps: `llamatalk/models.sh path` says where).
 

@@ -2,7 +2,7 @@
 # install.sh in a sandbox: a copy of the release, a temp HOME, Ports and ROM folders, a file:// mirror for the models
 # (small fake files). Checks: a device with a shared llamatalk directory (Retro Voice Chat's) downloads only what
 # autogamer adds; a fresh one fetches into ./models; the lab's "AI Plays" entries are replaced by one Autogamer entry;
-# --no-e4b; --uninstall. No network, no real paths touched.
+# --no-e4b, --no-talk; --uninstall. No network, no real paths touched.
 # Usage: test/test_install.sh [unpacked release dir]   (default: dist/autogamer; runs on the host or on the handheld)
 R=${1:-$(cd "$(dirname "$0")/.." && pwd)/dist/autogamer}
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
@@ -29,9 +29,12 @@ printf '#!/bin/sh\nexec firefox\n' > "$T/ports/Firefox.sh"
 grep -q "exec \"$T/app/app/autogamer.sh\"" "$E"; ok $? "the Autogamer entry runs app/autogamer.sh"
 [ "$(grep -c MISSING "$T/out1")" = 9 ]; ok $? "no ROMs: all nine games say what to add"
 
-# 2. fresh device, --no-e4b: ./models with e2b and tts only
+# 2. fresh device, --no-e4b: ./models with e2b, tts and asr; --no-talk too: e2b and tts only
 fresh; "$T/app/install.sh" --no-e4b > "$T/out2" 2>&1; ok $? "fresh --no-e4b: install.sh runs"
-[ "$(ls "$T/app/models" | wc -l)" = 3 ] && [ ! -e "$T/app/models/gemma-4-E4B_q4_0-it.gguf" ]; ok $? "fresh --no-e4b: e2b and tts in ./models"
+[ "$(ls "$T/app/models" | wc -l)" = 5 ] && [ ! -e "$T/app/models/gemma-4-E4B_q4_0-it.gguf" ] \
+  && [ -f "$T/app/models/Qwen3-ASR-0.6B-Q8_0.gguf" ]; ok $? "fresh --no-e4b: e2b, tts and asr in ./models"
+fresh; "$T/app/install.sh" --no-e4b --no-talk > "$T/out2" 2>&1; ok $? "fresh --no-e4b --no-talk: install.sh runs"
+[ "$(ls "$T/app/models" | wc -l)" = 3 ] && [ ! -e "$T/app/models/Qwen3-ASR-0.6B-Q8_0.gguf" ]; ok $? "fresh --no-talk: e2b and tts only"
 
 # 3. --uninstall: the entry goes, the models stay
 "$T/app/install.sh" --uninstall > "$T/out3" 2>&1; ok $? "uninstall runs"

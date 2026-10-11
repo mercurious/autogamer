@@ -39,7 +39,7 @@
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
 #   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL /
 #   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL / AG_CONTRA_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
-#   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
+#   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_TALK=0 (contra-coop: no talking to Player 2, no Qwen3-ASR), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
 #   AG_60HZ=0 (leave the panel at 120 Hz), AG_RA_CFG (one more RetroArch config file, appended last)
 # Cores (SM8250): RetroArch and the players on 0-3, the LLM on 4-7, TTS on 6-7. Unpinned, RetroArch wandered onto
 # 4-7 and the LLM's point calls gave it 23 frames over 25 ms a minute; pinned to 0-3, 1.
@@ -130,6 +130,17 @@ start_tts() {
   PIDS="$PIDS $!"; export TL_TTS=1
 }
 
+# Qwen3-ASR for what the player says (contra-coop: hold R1 and talk to Player 2), if installed. Cores 4-7 with the
+# LLM: it reads ~0.5 s of speech after a press, then sleeps. --cache-ram 0: its prompt cache would keep a copy of
+# every utterance (retro-voice-chat measured 2 GB after ~80).
+start_asr() {
+  [ "${AG_TALK:-1}" != 0 ] && [ -f "$M/Qwen3-ASR-0.6B-Q8_0.gguf" ] && [ -f "$M/mmproj-Qwen3-ASR-0.6B-Q8_0.gguf" ] || return
+  env -u OMP_PROC_BIND -u OMP_PLACES taskset -c 4-7 "$LLAMA" -m "$M/Qwen3-ASR-0.6B-Q8_0.gguf" \
+    --mmproj "$M/mmproj-Qwen3-ASR-0.6B-Q8_0.gguf" -dev none -t 4 -c 4096 -np 1 --cache-ram 0 \
+    --host 127.0.0.1 --port 8091 > "$O/asr.log" 2>&1 &
+  PIDS="$PIDS $!"; export AG_CT_VOICE=1
+}
+
 MODEL_GAME=""
 case $GAME in
   tennis)
@@ -187,7 +198,7 @@ case $GAME in
     setup_levels "0.5 0.75 1" "AI PLAYS PUNCH-OUT!! (MODEL RUNS THE OFFENCE)" \
       "Mac dodges by himself. $AG_MODEL_LABEL takes about $THINK s to call|pummel, body blows or wait when the opponent is open;|the game slows down for each call. Too late: the opening is gone." ;;
   contra-coop)
-    pick_model "${AG_CONTRA_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
+    pick_model "${AG_CONTRA_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts; start_asr
     export TL_CALIB="$ST/think_contra_$AG_MODEL_LABEL.txt" AG_CT_KONAMI=${AG_CT_KONAMI:-0} AG_CT_STANDIN=${AG_CT_STANDIN:-0} \
       AG_CT_RECORD="$ST/contra_record.json"   # what the model learns across games
     case $AG_MODEL_LABEL in E4B) THINK=4.5 ;; *) THINK=3 ;; esac   # Punch-Out!!'s call times + a longer question: estimates
