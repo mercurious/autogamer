@@ -243,7 +243,8 @@ if __name__ == "__main__":
                                 if abs(prev.ex(k) - prev.x(i)) < 40 and abs(prev.ey(k) - prev.y(i)) < 48]
                         log(dict(lost="P%d" % (i + 1), stage=stage, scr=st.z[0x64], role=role, lives=st.lives(i),
                                  x=prev.x(i), y=prev.y(i), pose=prev.pose(i), near=near,
-                                 note=(me if i == ME else stand).note if (i == ME or stand) else ""))
+                                 note=(me if i == ME else stand).note if (i == ME or stand) else "",
+                                 took=(me if i == ME else stand).took if (i == ME or stand) else None))
 
             # answers that came in: the new standing call
             for b in [b for b in pending if "ans" in b]:
@@ -279,13 +280,22 @@ if __name__ == "__main__":
             # the soldiers: P2 keeps its place from P1 by the standing call; never at the left edge while P1 pushes on
             if st.alive(HUMAN) and not st.indoor() and not st.vertical():
                 g = st.x(HUMAN) + OFFSET.get(role or "cover", -20)
-                me.goal = max(min(g, 0xd8), EDGE)
-            elif not st.alive(HUMAN): me.goal = 0xc0            # alone: push on (the 2-player scroll point is 0xb0)
+                if st.x(HUMAN) < 0x40: g = min(g, contra.SCROLL_X - 8)   # P1 hangs back: no scroll to drag them
+                me.goal = max(min(g, 0xd8), EDGE)                         # into the corner (and stop P2 there)
+            elif st.over(HUMAN): me.goal = 0xc0                 # alone: push on (the 2-player scroll point is 0xb0)
+            elif not st.alive(HUMAN) and not st.indoor() and not st.vertical():
+                me.goal = min(me.goal, contra.SCROLL_X - 8)      # P1 drops back in: no scroll under them
             # the waterfall: a climb above 0x50 scrolls the screen and pushes P1 down; not while P1 is low on it
             me.ceiling = 0x50 if st.vertical() and st.alive(HUMAN) and st.y(HUMAN) > 0x90 else 0
             if item is None: me.pickup = False                    # a TAKE holds for the weapon it was about
-            press(ME, me.step(st), st.frame())
-            if stand: press(HUMAN, stand.step(st), st.frame())
+            for i, sd in ((ME, me), (HUMAN, stand)):
+                if not sd: continue
+                press(i, sd.step(st), st.frame())
+                if sd.jump_t == sd.n:                             # a take-off: why, where, toward what
+                    sd.took = dict(jump="P%d" % (i + 1), note=sd.note, x=st.x(i), y=st.y(i), goal=sd.goal, d=sd.jump_d,
+                                   scr=st.z[0x64], px=st.z[0x65], other=st.x(1 - i), role=role)
+                    log(sd.took)
+                if sd.stall: log(dict(sd.stall, who="P%d" % (i + 1), role=role)); sd.stall = None
             if time.time() - mem.get("status", 0) > 0.5:          # what each soldier is doing, for a look from outside
                 mem["status"] = time.time()
                 try:
