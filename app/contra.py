@@ -18,7 +18,7 @@
 # Two players (bank7): the screen does not scroll while the other player stands left of x 0x21; on the vertical level
 # the lower player is pulled down and dies off the screen; indoors the next room opens only when both are ready; a
 # player who is game over and presses A takes a life from the other one. The soldier never presses A once it is out.
-import math, os, socket, sys
+import math, os, socket, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # the game's collision boxes: [player pose][enemy collision code] = (dy, dx, height, width) added to the enemy's
@@ -47,11 +47,19 @@ ITEMS = {0: "rapid fire (R)", 1: "machine gun (M)", 2: "fire gun (F)", 3: "sprea
          5: "barrier (B)", 6: "falcon"}
 LEVELS = ["Jungle", "Base 1", "Waterfall", "Base 2", "Snow Field", "Energy Zone", "Hangar", "Alien's Lair"]
 PLAYING = 4                  # level routine: playing the level
-# the jump (measured on car8): screen y relative to the take-off, frame by frame; 58 frames, 59 px up at frame 29
+# the jump (measured on car8): screen y relative to the take-off, frame by frame; 58 frames, 59 px up at frame 29.
+# In the air a player moves 1 px a frame the way the pad points (it can turn), and falls with GRAV px a frame a frame
+# (measured on car12: a walk off an edge and the jump's own fall). A 2-player screen scrolls when a player passes
+# SCROLL_X; while the other player stands left of 0x21 the game zeroes the scroller's X speed (bank7
+# @stop_player_x_velocity): a jump over a pit from there drops straight down. The scroll also drags the player who
+# is not scrolling 1 px a frame left (scroll_player), off a ledge if it stands at its left end.
 JUMP_DY = [0, 0, -4, -8, -12, -15, -19, -22, -25, -28, -31, -33, -36, -38, -41, -43, -45, -47, -48, -50, -51, -53,
            -54, -55, -56, -57, -57, -58, -58, -59, -59, -59, -58, -58, -58, -57, -56, -55, -54, -53, -52, -51, -49, -47,
            -46, -44, -42, -39, -37, -34, -32, -29, -26, -23, -20, -17, -13, -10, -6, -2, 0]
 # base corridors: what to shoot first (lower first): soldiers at the front, then the wall's guns, then its core
+GRAV = 0.14
+LAG = 3                      # px a player walks between the poll that decides a jump and the take-off
+SCROLL_X = 0xb0
 INSTANT = 10                 # crouching and diving act at once: only when a hit is this many frames off (it stops you)
 LOW_WALL = 110               # a base target this low on the screen takes crouching shots (a core at 112: yes; 104: standing)
 INDOOR_TARGETS = {0x15: 0, 0x16: 0, 0x18: 0, 0x17: 1, 0x13: 1, 0x14: 2, 0x10: 2}
@@ -156,6 +164,12 @@ class Soldier:
         self.seen = {}; self.vel = {}   # slot -> (type, x, y, frame) last poll; slot -> (vx, vy, ay) a frame
         self.ceiling = 0             # the vertical level: never jump to rise above this screen y (0: no limit)
         self.climb_x = None; self.leap = False   # the ledge it jumps for; a jump over a pit or for a ledge
+        self.took = None                         # the last take-off (for the log)
+        self.chase = (None, 0)                   # the item (slot) it goes for, since when
+        self.jump_f = None; self.last = None     # the take-off frame; (frame, y) of the last poll (fall speed)
+        self.offs = []; self.calm_until = 0; self.calm_d = 0   # take-offs (time, world x); the loop breaker
+        self.stalls = []; self.stall = None      # loops caught (times, 30 s); the last, for the log
+        self.air = None; self.air_bad = 0        # in the air: the plan (d, hold frames or None, from frame); misses
 
     def track(self, st):
         """each enemy's speed: its RAM speed, or what it moved since the last poll (rollers and others that move
@@ -199,6 +213,7 @@ class Soldier:
         best = None; t_plan = None
         for name, dd, crouch, jump in opts:
             if jump and (self.n - self.jump_t < 6 or st.jumping(i)): continue
+            if jump and not st.vertical() and self.fly_any(st, px, py, dd, t0=0)[0] is None: continue   # into a pit
             if crouch and t_plan is not None and t_plan > INSTANT: continue   # a crouch takes no time: not yet
             if crouch: t = self.first_hit(st, CROUCH, lambda t: (px, py), bullets=not indoor)
             elif jump: t = self.first_hit(st, JUMP, lambda t: (px + dd * t, py + JUMP_DY[min(t, len(JUMP_DY) - 1)]))
@@ -220,9 +235,120 @@ class Soldier:
         return False
 
     def ground_below(self, st, x, y):
-        """something to land on below screen point (x, y) of a player: water at any depth, floor or solid above the
-        bottom 24 px (a landing that low is off the screen: the chasms of the jungle)"""
-        return any((b := st.bg(x, yy)) == H2O or b != EMPTY and yy < 0xc8 for yy in range(max(y + 0x10, 0), 0xe0, 8))
+        """something to land on below screen point (x, y) of a player: water, floor or solid down to the bottom (a
+        ledge low on the screen holds: the jungle's chasm on screen 9 is crossed by its low ledge, feet at 0xd0). On
+        the waterfall, not the bottom 24 px (the screen climbs: a landing that low is soon off it)"""
+        low = 0xc8 if st.vertical() else 0xe0
+        return any((b := st.bg(x, yy)) == H2O or b != EMPTY and yy < low for yy in range(max(y + 0x10, 0), 0xe0, 8))
+
+    KS = (60, 54, 48, 44, 40, 34, 28, 24, 20, 16, 12, 8, 4, 1)   # frames into the air to press the other way
+
+    def latch(self, st):
+        """the way a player in the air goes (the game keeps the last LEFT/RIGHT pressed in the air: bank7
+        @set_jump_status_from_input): +1, -1 or 0 (straight up or down)"""
+        c = st.z[0xa0 + self.i] if st.jumping(self.i) else st.z[0xa4 + self.i]
+        return 1 if c & 0x20 else -1 if c & 0x40 else 0
+
+    def ways(self, d, L=None):
+        """ways to steer a flight, best first: (v1, k, v2) goes v1 a frame (press v1; 0: press nothing) until frame
+        k, then v2 (None: v1 all the way). In the air a player cannot stop, only turn: braking is turning back.
+        d: the way it wants to go; L: the way it goes now (None: a take-off, which goes d)"""
+        out = [(d, None, None)] if L is None or d else [(L, None, None)]
+        if L is not None and L != d: out.append((L, None, None))
+        v = d or L or 0
+        if v: out += [(v, k, -v) for k in self.KS]                     # go, then turn back (brake)
+        if L == 0: out += [(0, k, w) for w in ((d, -d) if d else (1, -1)) for k in self.KS]   # rise, then go
+        if v: out.append((-v, None, None))
+        return list(dict.fromkeys(out))
+
+    def fly_any(self, st, x, y, d, vy=0.0, t0=None, across=None, L=None):
+        """the first way (ways()) that comes down safely, and beyond screen x across if given: (landing, way), or
+        (None, None). Landings with 4 px of floor on both sides first: one on a ledge's lip misses by a pixel"""
+        lip = None
+        for w in self.ways(d, L):
+            ln = self.fly(st, x, y, w, vy, t0)
+            if ln and (across is None or (ln[1] - across) * (d or 1) > 0):
+                if self.ledge_from(st, ln[1], ln[2], 1) >= 4 and self.ledge_from(st, ln[1], ln[2], -1) >= 4: return ln, w
+                lip = lip or (ln, w)
+        return lip or (None, None)
+
+    def fly(self, st, x, y, way, vy=0.0, t0=None):
+        """where a player in the air at screen (x, y), steering way (ways()), comes down: (frames, x, feet), or None
+        if it falls off the bottom. t0: frames into a jump (its course is JUMP_DY), else it falls from speed vy. The
+        x it reaches stops at SCROLL_X while the other player blocks the scroll (dragged left as the screen goes).
+        (The other player's scroll drags this one left on the screen, but the ground with it: none of the flight's
+        course changes.)"""
+        i = self.i; o = 1 - i; ox = st.x(o); v1, k, v2 = way
+        both = st.two() and not st.over(o) and not st.over(i) and not st.vertical()
+        y0 = y - JUMP_DY[t0] if t0 is not None and t0 < len(JUMP_DY) else None
+        feet = y + 0x10; fx = float(x)
+        for t in range(1, 160):
+            if y0 is not None and t0 + t < len(JUMP_DY): ny = y0 + JUMP_DY[t0 + t]
+            else:
+                if y0 is not None: vy = 4.0; y0 = None; y = feet - 0x10        # off the end of the table
+                vy += GRAV; ny = y + vy
+            d = v1 if k is None or t <= k else v2
+            if d:
+                nx = fx + d
+                if d > 0 and both and nx > SCROLL_X:
+                    if ox < 0x21: nx = fx                       # the scroll is blocked: no X speed
+                    else: ox -= 1
+                if st.bg(int(nx) + 8 * d, int(ny) + 8) == SOLID: nx = fx
+                fx = nx
+            nf = ny + 0x10
+            if not 0 <= fx < 256: return None
+            if nf > feet:                                       # coming down: the first floor its feet cross
+                for yy in range(int(feet) + 1, int(nf) + 1):
+                    if yy >= 0xe0: return None
+                    if st.bg(int(fx), yy) != EMPTY and st.bg(int(fx), yy - 1) == EMPTY: return t, int(fx), yy
+            feet = nf; y = ny
+        return None
+
+    def edge(self, st, d, reach=24):
+        """how far (px) the floor under it goes on toward d before a drop, or None (no drop within reach)"""
+        i = self.i; px, feet = st.x(i), st.y(i) + 0x10
+        for look in range(1, reach + 1):
+            x = px + d * look
+            if not 0 <= x < 256: return None
+            if st.bg(x, feet) == EMPTY and st.bg(x, feet + 4) == EMPTY: return look
+        return None
+
+    def ledge_from(self, st, x, feet, d):
+        """how far a floor at feet runs on toward d from x (to 32 px): the room a landing has"""
+        n = 0
+        while n < 32 and st.bg(x + d * n, feet) != EMPTY: n += 1
+        return n
+
+    def pit_plan(self, st, d, goal):
+        """walking d toward goal, with a deadly drop ahead: ("jump"), ("wait") at the edge, or None (go on)"""
+        i = self.i; px, py = st.x(i), st.y(i)
+        e = self.edge(st, d)
+        if e is None: return None                                               # no drop
+        ln = self.fly(st, px + d * e, py, (d, None, None))                      # walking off lands below, going on as
+        if ln and min(self.ledge_from(st, ln[1], ln[2], dd) for dd in (1, -1)) >= 3: return None   # it walks
+        ex = px + d * e
+        if (goal - ex) * d <= 8 or d < 0: return "wait" if e <= 7 else None    # the goal is this side of the gap, or
+                                                                                # back (the screen never scrolls back:
+                                                                                # wait for the other player instead)
+        # the press lands a frame or two later (a poll, the network pad): the jump starts 1 to LAG px on, and
+        # never nearer the edge than that. One way of steering must work from both.
+        ln = k = None
+        if e > LAG:
+            for w in self.ways(d):
+                a = self.fly(st, px + d, py, w, t0=0); b = self.fly(st, px + d * LAG, py, w, t0=0)
+                if a and b and (a[1] - ex) * d > 0 and (b[1] - ex) * d > 0 and \
+                        min(self.ledge_from(st, c[1], c[2], dd) for c in (a, b) for dd in (1, -1)) >= 3: ln, k = a, w; break
+        if ln:                                                                  # it lands across the gap
+            if e <= LAG + 3 or self.ledge_from(st, ln[1], ln[2], -d) >= 10: return "jump", k
+            return None                                                          # nearer the edge lands deeper in
+        if e <= LAG: return "back"                                               # too near to jump: a run-up
+        return "wait" if e <= 7 else None
+
+    def steer(self, st, d, t0=None, vy=0.0):
+        """in the air: a way (ways()) that comes down safely, toward d first, else the way it goes"""
+        i = self.i; px, py = st.x(i), st.y(i); L = self.latch(st)
+        ln, w = self.fly_any(st, px, py, d, vy, t0, L=L)
+        return w or (L, None, None)
 
     def nearest_ground(self, st, px, py):
         """the nearest x (within 96 px) with something to land on below it"""
@@ -295,13 +421,19 @@ class Soldier:
     def step(self, st):
         """the buttons to hold this frame"""
         i = self.i; self.n += 1; self.f = st.frame(); self.note = ""; self.track(st)
+        last = self.last; self.last = (self.f, st.y(i))
+        if st.pstate(i) != 1: self.jump_f = None                            # dead or dropping in: a new course
+
         if not st.playing() or st.pstate(i) != 1 or st.over(i): return []   # never A when out: it takes a life
         if st.z[0x40] == 1: return self.step_indoor(st)
         px, py = st.x(i), st.y(i); grounded = not st.jumping(i)
-        btn = set()
+        on_floor = grounded and (st.bg(px, py + 0x10) != EMPTY or st.in_water(i))   # not walked off an edge
+        btn = set(); now = time.time(); side_on = not st.vertical()
 
         # where to go: the goal, or a weapon item when it may take one
         goal = self.goal; k = self.item(st); up = False
+        if k != self.chase[0]: self.chase = (k, now)            # an item it cannot reach in 6 s: leave it
+        if k is not None and now - self.chase[1] > 6: k = None
         if k is not None and self.pickup:
             if st.ey(k) < py - 20:                           # above: climb toward it, or leave it
                 if grounded and not st.in_water(i):
@@ -339,28 +471,69 @@ class Soldier:
 
         # danger: the move that stays clear for H frames
         jump = False
-        if grounded or st.in_water(i):
+        if on_floor or st.in_water(i):
             name, d2, crouch, jump = self.dodge(st, d)
             if name != "plan":
                 self.note = name; d = d2
                 if crouch: aim = "low"; d = 0
-        if up and not jump and grounded: jump = True; self.note = "climb"
-        # pits: jump over (on the ground, walking toward one)
-        if grounded and d and not jump and self.pit_ahead(st, d): jump = True; self.note = "pit"
+        if up and not jump and on_floor and (not side_on or self.fly_any(st, px, py, d, t0=0)[0] is not None):
+            jump = True; self.note = "climb"                  # (a jump for an item lands somewhere)
+        # pits: jump when the jump lands across and the goal is over there; else wait at the edge
+        if side_on and on_floor and d and not jump and not st.in_water(i):
+            if now < self.calm_until:                           # breaking a loop: back off a moment, then stand
+                back = now < self.calm_until - 2.2 and self.edge(st, self.calm_d, 8) is None
+                d = self.calm_d if back else 0; self.note = "unstick"
+            else:
+                lp = self.pit_plan(st, d, goal)
+                if lp and lp[0] == "jump": jump = True; self.note = "pit"; self.air = (lp[1], None)
+                elif lp == "wait": d = 0; self.note = "edge"
+                elif lp == "back": d = -d; self.note = "runup"
+        elif not side_on and grounded and d and not jump and self.pit_ahead(st, d): jump = True; self.note = "pit"
         if jump and self.n - self.jump_t < 8: jump = False   # a jump is a press: let A go between them
-        if jump: btn.add("a"); self.jump_t = self.n; self.jump_d = d or self.face
-        if jump: self.leap = self.note in ("pit", "climb")
+        if jump and side_on and self.note in ("pit", "climb") and now < self.calm_until: jump = False
+        if jump:
+            btn.add("a"); self.jump_t = self.n; self.jump_d = d or self.face
+            self.leap = self.note in ("pit", "climb")
+            if self.leap: self.looped(st, now)                  # (dodges in place at a boss wall are no loop)
+            if self.note != "pit": self.air = None
         if not grounded and self.n - self.jump_t < 60 and self.jump_d and not st.vertical():
             if self.leap: d = self.jump_d                       # over a pit: no turning back in the air
             elif self.note not in ("back",): d = d or self.jump_d
 
-        # falling with nothing below (dropping in after a life is lost, off an edge, a short jump): steer for ground
-        falling = not grounded or st.z[0xa4 + i] or st.bg(px, py + 0x10) == EMPTY
-        if falling and not st.in_water(i) and not self.ground_below(st, px, py):
+        # in the air (a jump, off an edge, dropping in after a life is lost): a way that comes down on something,
+        # chosen once (at the take-off, or on the first poll in the air) and kept: re-planned on every poll, the
+        # pad flickered between the ways and came down short. Timed from the take-off the game shows (a jump's
+        # course is known from then); re-planned only when it fails three polls running.
+        falling = not on_floor and not st.in_water(i)          # (0xA4, the edge-fall code, outlives the landing)
+        if (not falling or st.in_water(i)) and self.n - self.jump_t >= 8: self.air = None; self.jump_f = None   # landed
+        if st.jumping(i) and self.jump_f is None:               # the take-off, seen: a frame ago at most
+            self.jump_f = (self.f - 1) % 256 if last and (self.f - last[0]) % 256 <= 1 else (self.f - 2) % 256
+        if falling and not st.in_water(i) and side_on:
+            t0 = (self.f - self.jump_f) % 256 if st.jumping(i) and self.jump_f is not None else None
+            vy = (py - last[1]) / max((self.f - last[0]) % 256, 1) if last and t0 is None else 0.0
+            if t0 is not None and t0 >= len(JUMP_DY) + 30: t0 = None
+            if self.air and self.air[1] is None:              # a planned take-off: its frames count from now
+                self.air = (self.air[0], self.jump_f if self.jump_f is not None else self.f)
+            if self.air is None: self.air = (self.steer(st, d, t0, vy), self.f); self.air_bad = 0
+            (v1, k, v2), af = self.air; gone = (self.f - af) % 256
+            rest = (v1, None, None) if k is None else (v1, k - gone, v2) if gone < k else (v2, None, None)
+            if self.fly(st, px, py, rest, vy, t0) is None:
+                self.air_bad += 1
+                if self.air_bad >= 3: self.air = (self.steer(st, d, t0, vy), self.f); self.air_bad = 0
+            else: self.air_bad = 0
+            (v1, k, v2), af = self.air; gone = (self.f - af) % 256
+            dd = v1 if k is None or gone < k else v2
+            if dd != d: d = dd; self.note = self.note or "steer"
+        elif falling and not st.in_water(i) and not self.ground_below(st, px, py):
             tx = self.nearest_ground(st, px, py)
             if tx is not None: d = 1 if tx > px else -1; self.note = "steer"
+        # the other player scrolls the screen: it drags this one left, off a ledge if it stands at the end of one
+        if side_on and on_floor and d <= 0 and not jump and st.x(1 - i) >= SCROLL_X and self.edge(st, -1, 6) \
+                and self.edge(st, 1, 10) is None:
+            d = 1; self.note = "drag"
 
-        # the pad: walking direction and aim
+        # the pad: walking direction and aim (a diagonal walks: not off the edge it waits at)
+        if self.note in ("edge", "runup") and aim in ("upfwd", "downfwd"): aim = "up" if aim == "upfwd" else "fwd"
         side = "right" if (d or self.face) > 0 else "left"
         if d: btn.add(side)
         if aim == "up": btn.add("up")
@@ -370,8 +543,22 @@ class Soldier:
         elif aim == "low" and grounded: btn.add("down"); btn.discard("right"); btn.discard("left")
         if self.fire(k): btn.add("b")
         if "a" in btn: btn.discard("down")                   # down + A on a floor drops through it
+        if self.air and falling and side_on:                  # in the air a LEFT/RIGHT is a turn: only the plan's
+            btn -= {"left", "right"}
+            if d: btn.add("right" if d > 0 else "left")
         if "left" in btn and "right" in btn: btn.discard("left" if (d or self.face) > 0 else "right")
         return sorted(btn)
+
+    def looped(self, st, now):
+        """a take-off for a pit or a ledge: three inside one 24 px stretch of the level in 8 s is a loop (it jumps and comes back). Break
+        it: no jumps for a pit for 3 s, backing off first"""
+        w = st.z[0x64] * 256 + st.z[0x65] + st.x(self.i)
+        self.offs = [o for o in self.offs if now - o[0] < 8] + [(now, w)]
+        near = [o for o in self.offs if abs(o[1] - w) < 24]
+        if len(near) < 3: return
+        self.offs = []; self.stalls = [t for t in self.stalls if now - t < 30] + [now]
+        self.calm_until = now + 3; self.calm_d = -(self.jump_d or self.face)
+        self.stall = dict(stall=len(self.stalls), x=st.x(self.i), y=st.y(self.i), scr=st.z[0x64], note=self.note)
 
     def fire(self, k):
         """press and release B (the rifle shoots on each press), 4 frames each, while there is something to shoot"""

@@ -1,8 +1,9 @@
 #!/bin/sh
 # Autogamer installer. Runs ON the handheld, from the unpacked release directory.
-#   ./install.sh [--no-e4b] [--no-models]      ./install.sh --uninstall
+#   ./install.sh [--no-e4b] [--no-talk] [--no-models]      ./install.sh --uninstall
 #   --no-e4b     skip gemma-4-E4B (5.2 GB): Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B, which
 #                thinks faster and worse
+#   --no-talk    skip Qwen3-ASR (1 GB): you cannot talk to Contra's Player 2 (hold R1 and give it orders)
 #   --no-models  skip the downloads (the models directory already has them)
 # The models go to llamatalk's shared models directory, which every app that bundles llamatalk uses (Retro Voice
 # Chat, for one): models already there are not downloaded again. Which directory: AG_MODELS if set, else the shared
@@ -13,10 +14,10 @@ H=$(cd "$(dirname "$0")" && pwd); P=${AG_PORTS:-/storage/roms/ports}; LTM=$H/lla
 ENTRY="Autogamer.sh"
 # the lab prototype's entries, one per game ("AI Plays ...", ollamadreno's retroplay/rp.sh): matched by what they exec
 STALE_RE="retroplay/rp\.sh"
-E4B=1; MODELS=1
+E4B=1; MODELS=1; TALK=1
 for a in "$@"; do
   case $a in
-    --no-e4b) E4B="" ;; --no-models) MODELS="" ;;
+    --no-e4b) E4B="" ;; --no-models) MODELS="" ;; --no-talk) TALK="" ;;
     --uninstall)
       rm -f "$P/$ENTRY"
       echo "Removed the Ports entry. This directory and the models (shared with other llamatalk apps) are still here:"
@@ -33,7 +34,7 @@ done
 M=${AG_MODELS:-}
 [ -n "$M" ] || M=$("$LTM" path 2>/dev/null) || M=""
 [ -n "$M" ] || M=$H/models
-SETS="e2b tts"; [ -n "$E4B" ] && SETS="$SETS e4b"
+SETS="e2b tts"; [ -n "$E4B" ] && SETS="$SETS e4b"; [ -n "$TALK" ] && SETS="$SETS asr"
 if [ -n "$MODELS" ]; then
   "$LTM" fetch --dir "$M" $SETS
 elif [ -d "$M" ]; then
