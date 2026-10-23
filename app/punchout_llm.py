@@ -22,7 +22,8 @@
 # RAM (NES CPU addresses; TASVideos' map, timing mapped 2026-10-10 on a headless fceumm): 00 1 in a fight (48 the
 # intro, 253 Mac lost, 254 Mac won), 01 opponent (0 Glass Joe .. 13 Tyson), 05 1 opponent down, 2 Mac down, 06 round,
 # 1E frame counter, 90 the opponent's move (01 idle, a punch id 15-1F (and Don Flamenco's 06) while it winds up and
-# throws, lower ids for reactions: 05 a guard (King Hippo and Don Flamenco punch back from it, as learned on car12),
+# throws, lower ids for reactions: 05 a guard (King Hippo, Don Flamenco and Great Tiger punch back from it when Mac
+# jabs into it; the jabs stop there),
 # 0E/12 hit in the face, 13/14 King Hippo hit in the belly; 80 bit set
 # between moves), 300 clock running, 302/304/305 clock m:s s, 323/324 hearts (tens, units), 342 stars, 391 Mac's health
 # and 398 the opponent's (0-96), 3C0 losses. A dodge (left, 4 frames) works from 29 to 7 frames before the punch lands,
@@ -41,7 +42,7 @@ NAMES = ["Glass Joe", "Von Kaiser", "Piston Honda", "Don Flamenco", "King Hippo"
 CIRCUIT = ["Minor Circuit"] * 3 + ["Major Circuit"] * 4 + ["World Circuit"] * 6 + ["Dream Fight"]
 PUNCH = {0: {0x15: 36, 0x16: 58}, 1: {0x16: 33, 0x17: 39},
          2: {0x15: 43, 0x16: 50, 0x17: 43, 0x18: 13, 0x1A: 13, 0x1B: 57}, 3: {0x05: 40, 0x06: 42, 0x18: 51},
-         4: {0x05: 36, 0x15: 40, 0x16: 40, 0x17: 43, 0x18: 43, 0x19: 84}, 5: {0x16: 41, 0x17: 31, 0x18: 31},
+         4: {0x05: 36, 0x15: 40, 0x16: 40, 0x17: 43, 0x18: 43, 0x19: 84}, 5: {0x05: 36, 0x16: 41, 0x17: 31, 0x18: 31},
          6: {0x15: 33, 0x16: 38, 0x17: 24, 0x19: 138},
          7: {0x15: 30, 0x16: 19, 0x17: 30, 0x18: 9, 0x19: 81, 0x1A: 11, 0x1C: 47, 0x1D: 76},
          8: {0x15: 27, 0x16: 19, 0x18: 24, 0x1A: 105}, 9: {0x15: 27, 0x16: 29, 0x17: 21, 0x1A: 135},
@@ -57,13 +58,19 @@ COUNTER = {0: {0x15: (0, None), 0x16: (None, 4)}, 1: {0x16: (None, 6)},
            10: {0x06: (50, None), 0x15: (0, None), 0x16: (None, 4)}}
 DEFAULT_K = 4
 EARLY, LATE = 29, 8          # the dodge window: frames before the impact (7, and a frame for the poll)
-FIRST = 12                   # dodge this many frames before the impact (or at once when later than that)
+FIRST = 16                   # dodge this many frames before the impact (or at once when later than that): the poll
+                             # sees a wind-up up to 2 frames late and the press acts 1-2 frames on, so it lands mid-window
+GUARD_FIRST = 12             # a guard's counter (05) dodges only from 12 to 9 frames before (Great Tiger)
+DODGE_K = {(8, 0x1A): 57}    # dodges at their own frame: Soda Popinski's 1A dodges from 46 to 68 frames after it starts
 SPREAD = {(0, 0x15): 9}      # how much later than its fastest a punch can land (Glass Joe's jab: 36-44; others 0-2)
 BLOCKED = 45                 # jabs stop when this many frames pass without damage (it shows 20-30 after the jab)
 LONGEST = 400                # and after this many in any case (King Hippo's belly: 32 damage in 250 frames)
 OPEN, PROBE = 30, 240        # standing this many frames: an offence turn; then none for this many
 REEL = 100                   # an opening lasts at least this long (Glass Joe: a pummel 100 frames on landed)
 JAB = 10                     # a jab every this many frames, held 4
+JAB_BUSY = 12                # a counter this soon after a jab cannot be thrown in time: Mac dodges instead
+BLOCK = {(5, 0x19)}          # moves the reflex blocks: Great Tiger's Tiger Punch, five hits no dodge escapes; a block
+                             # (down) takes 2 of each 13, let go 2 frames after each hit and pressed again
 ASK_GAP = 20                 # seconds before the model is asked again about a turn it has a standing call for
 WINDUP = ("dodge", "cface", "cbody"); OFFENCE = ("pummel", "body", "wait"); STAR = ("star",)
 SAY = {"body": "To the body!", "pummel": "Pummel him!", "wait": "Wait.", "star": "Star punch!", "dodge": "Dodge it.",
@@ -86,7 +93,7 @@ SYSTEM = ("You are Little Mac in Mike Tyson's Punch-Out!! (NES, 1987). Mac dodge
           "hurts him. Blocked punches cost hearts; at zero Mac cannot punch. Knock him down to win. Reply exactly as: "
           "PICK <letter>")
 LABEL = (("safe", "dodged"), ("landed", "landed"), ("star", "earned a star"), ("hits", "hits"), ("down", "knocked him down"),
-         ("blocked", "blocked"), ("hit", "Mac hit"), ("late", "too late"))
+         ("blocked", "blocked"), ("hit", "times Mac was hit"), ("paid", "times Mac was hit right after it"), ("late", "too late"))
 
 def level():
     try:
@@ -163,6 +170,10 @@ def plainly(rec):
     out = ["%s knocked him down %s." % (TEXT[c][0].upper() + TEXT[c][1:], "once" if r["down"] == 1 else "%d times" % r["down"])
            for c, r in sorted(rec.items()) if r.get("down")]
     for c, r in sorted(rec.items()):
+        if c in WINDUP and c != "dodge" and r.get("hit", 0) >= max(2, r.get("n", 0) / 2):
+            out.append("%s got Mac hit %d of %d times: it hurts Mac, not him." % (TEXT[c][0].upper() + TEXT[c][1:], r["hit"], r["n"]))
+        if c != "dodge" and r.get("paid", 0) >= max(2, r.get("n", 0) / 2):
+            out.append("After %s Mac was hit right away %d of %d times." % (TEXT[c], r["paid"], r["n"]))
         if c == "wait" or r.get("n", 0) < 8 or r.get("hit"): continue
         if c == "dodge" and not r.get("after"): out.append("Dodging it has never led to a hit (%d dodges)." % r["n"])
         elif c != "dodge" and not r.get("hits") and not r.get("landed") and not r.get("star"):
@@ -227,16 +238,25 @@ if __name__ == "__main__":
     LEVEL, SLOW = level(); speed = Speed()
     book = load_book(); calls = book["calls"]; book_t = time.time()
     for o, ms in book["learned"].items():
-        for mv, land in ms.items(): PUNCH.setdefault(int(o), {}).setdefault(int(mv), land)
+        for mv, land in ms.items():
+            if (int(o), int(mv)) not in BLOCK: PUNCH.setdefault(int(o), {}).setdefault(int(mv), land)
     t0 = time.time(); worker = None; relevel = False; menu_t = 0; held = []; thinks = []
     frames = 0; fc = None; prev_m = None; fight = None; n = 0; polls = 0; idle = None; move = None; last_hp = 0
-    last_ohp = 0; stop_t = time.time(); probe = 0; attack_end = -99; blow = None
+    last_ohp = 0; stop_t = time.time(); probe = 0; attack_end = -99; blow = None; m01 = -99; jab_at = -99
+    paid = None        # Mac's last counter or jabs (turn, choice, frame): a hit on him soon after is put down to it
     turn = None        # the turn now on: {"kind" ("punch", "reel", "hurt", "stand"), "key", "f0", "choice", ...}
     attack = None      # Mac's jabs: {"choice", "next", "at", "btn", "last" (damage seen), "ohp", "hits", "star"}
     asked = {}         # turn -> when the model was last asked about it
     todo = {}          # offence turns to ask about first, for next time: gone by without a call while the model was
                        # busy, or their call just came to nothing
+    hurry = set()      # punches whose counter just got Mac hit: asked again at once
     pending = []       # questions whose answers have not come yet
+
+    def press(btn):
+        """make exactly these buttons pressed; a dodge or block first: RetroArch's network pad takes one message a frame,
+        so after a jab (release up, release B, press left) a dodge sent last acts 3 frames late"""
+        for b in [b for b in btn if b in ("left", "down") and b not in pad.held]: pad.set(b, True)
+        pad.hold(btn)
 
     def think_s():
         return sum(thinks[1:][-20:]) / len(thinks[1:][-20:]) if len(thinks) > 1 else THINK0
@@ -252,6 +272,7 @@ if __name__ == "__main__":
     def ask_turn(tn, text, order):
         global worker
         box = dict(order=order, turn=tn); tn["box"] = box; pending.append(box); asked[tn["key"]] = time.time()
+        hurry.discard(tn["key"])
         def think(text=text, box=box):
             t1 = time.time()
             try: box["ans"] = ask(text)
@@ -260,7 +281,7 @@ if __name__ == "__main__":
         worker = threading.Thread(target=think, daemon=True); worker.start()
 
     def may_ask(key):
-        return not busy() and (key not in calls or time.time() - asked.get(key, 0) > ASK_GAP)
+        return not busy() and (key not in calls or key in hurry or time.time() - asked.get(key, 0) > ASK_GAP)
 
     def open_turn(kind, z, h, after=None):
         """an offence turn. With a standing call for this opponent and situation Mac acts on it at once, and the model
@@ -293,6 +314,8 @@ if __name__ == "__main__":
             log(dict(attack=attack["choice"], kind=turn["kind"], opp=int(turn["key"].split()[0]), hits=attack["hits"], level=LEVEL, slow=SLOW))
             if attack["hits"] >= 2: ra.cmd("SHOW_MSG %s: %d hits!" % (MODEL, attack["hits"]), reply=False)
             if not attack["hits"] and time.time() - asked.get(turn["key"], 0) > ASK_GAP: todo[turn["key"]] = turn["kind"]
+        global paid
+        if attack and attack["hits"] and turn and turn["kind"] != "punch": paid = (turn["key"], attack["choice"], frames)
         if attack: attack_end = frames
         attack = None
 
@@ -344,10 +367,11 @@ if __name__ == "__main__":
                 line = ("Mac beats %s!" % NAMES[fight["opp"]] if won else
                         "%s beats Mac. %s" % (NAMES[fight["opp"]], "Game over." if fight["losses"] >= 2 else "Rematch."))
                 say(line, show="%s: %s" % (MODEL, line))
-                o = book["opp"].setdefault(str(fight["opp"]), dict(fights=0, won=0, secs=0, landed=0, taken=0))
-                for k, v in (("fights", 1), ("won", int(won)), ("secs", round(time.time() - fight["t0"])),
-                             ("landed", fight["hits"]), ("taken", fight["hit"])): o[k] = o.get(k, 0) + v
-                save_book(book)
+                if fight["calls"] or time.time() - fight["t0"] > 10:     # not a fight a loaded state cut short
+                    o = book["opp"].setdefault(str(fight["opp"]), dict(fights=0, won=0, secs=0, landed=0, taken=0))
+                    for k, v in (("fights", 1), ("won", int(won)), ("secs", round(time.time() - fight["t0"])),
+                                 ("landed", fight["hits"]), ("taken", fight["hit"])): o[k] = o.get(k, 0) + v
+                    save_book(book)
                 log(dict(fight_end=fight["result"], opp=fight["opp"], calls=fight["calls"], dodged=fight["dodged"],
                          hit=fight["hit"], hits=fight["hits"], late=fight["late"], polls_s=round(polls / max(time.time() - t0, 1), 1),
                          level=LEVEL, slow=SLOW))
@@ -365,7 +389,13 @@ if __name__ == "__main__":
                 said = "%s, %s." % (NAMES[opp], CIRCUIT[opp])
                 say(said, show="%s: fight: %s" % (MODEL, said)); log(dict(fight=NAMES[opp], opp=opp, losses=h[0xC0], level=LEVEL, slow=SLOW))
             if h[0x98] < last_ohp: fight["hits"] += 1                        # every punch that lands, either way
-            if hp < last_hp: fight["hit"] += 1
+            if hp < last_hp:
+                fight["hit"] += 1
+                if paid and frames - paid[2] < 60:                     # what Mac did just before it: on its record, asked again
+                    bump(paid[0], paid[1], paid=1)
+                    if paid[1] in WINDUP: hurry.add(paid[0])
+                    else: todo[paid[0]] = paid[0].split()[1]
+                paid = None
             if attack and h[0x98] < attack["ohp"]:
                 attack["hits"] += 1; attack["last"] = frames; blow = (turn["key"], attack["choice"], frames) if turn else None
             if attack: attack["ohp"] = h[0x98]
@@ -381,12 +411,27 @@ if __name__ == "__main__":
             else:
                 if m != prev_m and not m & 0x80 and m in PUNCH.get(opp, {}):     # a punch winds up: the call on it
                     end_attack(); speed.set(False, SLOW)
-                    key = "%d p%02x" % (opp, m); c = calls.get(key, "dodge"); tired = not hearts(h)
+                    key = "%d p%02x" % (opp, m); c = calls.get(key, "dodge")
+                    tired = not hearts(h) or (c != "dodge" and frames - jab_at < JAB_BUSY)   # no punch to throw, or no time
                     turn = dict(kind="punch", key=key, move=m, f0=frames, land=PUNCH[opp][m], hp=hp, ohp=h[0x98], stars=h[0x42],
                                 choice="dodge" if tired else c, standing=c, tired=tired, ck=counter_k(opp, m, c), done=False)
-                    if may_ask(key) and not todo:
+                elif m != prev_m and (opp, m) in BLOCK:                         # a move only a block takes
+                    end_attack(); speed.set(False, SLOW)
+                    turn = dict(kind="block", key="%d b%02x" % (opp, m), move=m, f0=frames, hp=hp, rel=-99, done=False)
+                    log(dict(block="%02x" % m, opp=opp, hp=hp, level=LEVEL, slow=SLOW))
+                if turn and turn["kind"] == "block" and not turn["done"]:
+                    if hp < last_hp: turn["rel"] = frames                       # a hit (blocked or not): let go, press again
+                    if m != turn["move"]:
+                        turn["done"] = True; log(dict(blocked="%02x" % turn["move"], opp=opp, dmg=turn["hp"] - hp, level=LEVEL, slow=SLOW))
+                    elif frames - turn["rel"] > 2: btn = ["down"]
+                    if may_ask(key) and (not todo or key in hurry):      # a counter that hurt Mac comes first
                         order = random.sample(WINDUP, len(WINDUP))
                         ask_turn(turn, pfacts(book, opp, fight, key, m, PUNCH[opp][m], z, h, order, c), order)
+                for key in [k for k in hurry if k.split()[0] == str(opp)]:     # a counter that hurt Mac: for next time
+                    if busy(): break
+                    mv = int(key.split()[1][1:], 16); order = random.sample(WINDUP, len(WINDUP))
+                    ask_turn(dict(kind="punch", key=key, move=mv, f0=frames, done=True, standing=calls.get(key, "dodge")),
+                             pfacts(book, opp, fight, key, mv, PUNCH[opp].get(mv, 30), z, h, order, calls.get(key, "dodge")), order)
                 for key in [k for k in todo if k.split()[0] == str(opp)]:      # a turn missed: for next time
                     if busy(): break
                     kind = todo.pop(key); order = random.sample(OFFENCE, len(OFFENCE))
@@ -394,53 +439,61 @@ if __name__ == "__main__":
                              ofacts(book, opp, fight, kind, key, z, h, 0, order, later=True), order)
                 if turn and turn["kind"] == "punch" and not turn["done"]:
                     k = frames - turn["f0"]; c = turn["choice"]; land = turn["land"]
-                    if c == "dodge" and "dodge_at" not in turn and land - FIRST <= k <= land - LATE: turn["dodge_at"] = k
+                    lead = GUARD_FIRST if turn["move"] == 0x05 else FIRST
+                    dk = DODGE_K.get((opp, turn["move"]))
+                    if c == "dodge" and "dodge_at" not in turn and (k >= dk if dk else land - lead <= k <= land - LATE): turn["dodge_at"] = k
                     if c in ("cface", "cbody") and "punch_at" not in turn and k >= turn["ck"]: turn["punch_at"] = k
                     if "dodge_at" in turn and k < turn["dodge_at"] + 4: btn = ["left"]
                     if "punch_at" in turn and k < turn["punch_at"] + 3: btn = ["up", "b"] if c == "cface" else ["b"]
                     end = max(land + SPREAD.get((opp, turn["move"]), 3), turn.get("punch_at", -99) + 35)   # a jab's damage shows 20-30 frames on
                     landed = "punch_at" in turn and (h[0x98] < turn["ohp"] or h[0x42] > turn["stars"])
                     if hp < turn["hp"] or k > end or landed:               # it landed (his or Mac's), or it is over
-                        res = ("hit" if hp < turn["hp"] else "star" if h[0x42] > turn["stars"] else
-                               "landed" if h[0x98] < turn["ohp"] else "safe" if c == "dodge" else "blocked")
+                        res = ("hit" if hp < turn["hp"] else "safe" if c == "dodge" else "star" if h[0x42] > turn["stars"] else
+                               "landed" if h[0x98] < turn["ohp"] else "blocked")
                         turn["done"] = True
                         bump(turn["key"], c, n=1, **{res: 1})
+                        if c != "dodge" and res != "hit": paid = (turn["key"], c, frames)
                         if res == "star" and h[0x98] < turn["ohp"]: bump(turn["key"], c, landed=1)
                         if res == "safe": fight["dodged"] += 1
+                        if res == "hit" and c != "dodge": hurry.add(turn["key"])
                         if res in ("star", "landed"): blow = (turn["key"], c, frames)
-                        log(dict(punch="%02x" % turn["move"], opp=opp, choice=c, result=res, at=turn.get("punch_at", turn.get("dodge_at")),
+                        log(dict(punch="%02x" % turn["move"], opp=opp, choice=c, result=res, at=turn.get("punch_at", turn.get("dodge_at")), k=k,
                                  hp=hp, ohp=h[0x98], level=LEVEL, slow=SLOW))
                         if res == "safe": open_turn("reel", z, h, after=(turn["key"], c))      # he is open: the model's turn
                         elif res in ("star", "landed"): open_turn("hurt", z, h, after=(turn["key"], c))
-                elif turn and turn["kind"] != "punch" and not turn["done"]:
+                elif turn and turn["kind"] not in ("punch", "block") and not turn["done"]:
                     k = frames - turn["f0"]
                     if turn["choice"] in ("pummel", "body", "star") and attack is None and "started" not in turn:
                         turn["started"] = True; start_attack(turn["choice"], h, star=turn["choice"] == "star")
                     if attack is None and k > (REEL if turn["kind"] != "stand" else OPEN * 3):   # nothing came of it
                         turn["done"] = True; speed.set(False, SLOW)
-                if attack:                                  # Mac's jabs: until they stop landing
-                    if frames - attack["last"] > BLOCKED or frames - attack.get("first", frames) > LONGEST: end_attack()
+                if attack:                                  # Mac's jabs: until they stop landing, or he guards
+                    if frames - attack["last"] > BLOCKED or frames - attack.get("first", frames) > LONGEST or m & 0x7F == 0x05:
+                        end_attack()
                     else:
                         attack.setdefault("first", frames)
-                        if frames >= attack["next"]:
+                        if frames >= attack["next"] and not (m == 0x01 and frames - m01 < 5):   # no jab out as he
+                            # comes back to idle: Great Tiger's 18 starts a frame later, and a jab then spoils the dodge
                             star = attack["star"] and h[0x42] > 0; attack["star"] = False
                             hand = ["b"] if attack["hand"] % 2 == 0 else ["a"]; attack["hand"] += 1
                             attack["btn"] = ["start"] if star else (["up"] + hand if attack["choice"] in ("pummel", "star") else hand)
-                            attack["at"] = frames; attack["next"] = frames + JAB
+                            attack["at"] = jab_at = frames; attack["next"] = frames + JAB
                         if frames < attack["at"] + 4: btn = attack["btn"]
                 if m not in PUNCH.get(opp, {}) and attack is None and (turn is None or turn["done"]):
                     if idle is None: idle = frames                  # not punching (from the bell on): an offence turn
                     elif frames - idle > OPEN and frames >= probe: open_turn("stand", z, h); probe = frames + PROBE
                 else: idle = None
-                if hp < last_hp and (turn is None or turn["kind"] != "punch" or turn["done"]) and move and move[0] not in PUNCH.setdefault(opp, {}):
+                if (hp < last_hp and (turn is None or turn["kind"] != "punch" or turn["done"]) and move and move[0] >= 0x15
+                        and move[0] not in PUNCH.setdefault(opp, {}) and (opp, move[0]) not in BLOCK):      # (lower ids are reactions: Mac's jab, not a punch)
                     PUNCH[opp][move[0]] = max(frames - move[1], FIRST)       # a punch not mapped: learn when it lands
                     book["learned"].setdefault(str(opp), {})[str(move[0])] = PUNCH[opp][move[0]]
                     log(dict(learned="%02x" % move[0], opp=opp, land=PUNCH[opp][move[0]], level=LEVEL, slow=SLOW))
             if m != prev_m and not m & 0x80 and m != 1: move = (m, frames)
+            if m == 0x01 and prev_m != 0x01: m01 = frames
             if h[0x00] == 1 and z[0x05] == 0: stop_t = time.time()
             prev_m = m; last_hp = hp; last_ohp = h[0x98]
             if time.time() - book_t > 20: save_book(book); book_t = time.time()
-            if btn != held: pad.hold(btn); held = btn
+            if btn != held: press(btn); held = btn
             time.sleep(0.003)
     finally:
         pad.release_all(); save_book(book)
