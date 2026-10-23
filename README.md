@@ -22,7 +22,7 @@ One **Autogamer** entry under Ports opens a menu:
 | main | **Tetris: the model decides** (NES) | the model picks where every piece goes, thinking while it falls | whether it keeps the stack down; too late, and the piece drops low where it falls |
 | main | **NES Tennis: the model aims every return** | the player runs and swings; the model picks where each return lands, of the two ends it can reach inside the court | points won and lost against the game's computer; too late, and it hits on impulse, away from the computer |
 | main | **Excitebike: the model rides the turbo** | a reflex rider steers, jumps and lands; the model calls turbo or cruise, each call holding until the next | the race clock against the qualifying time; too slow to ease off, and the engine overheats |
-| main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model calls pummel, body blows or wait whenever the opponent is open, in bullet time | the fight: win and the next opponent comes out; too late, and the opening is gone |
+| main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model looks for each opponent's weak spot: dodge or counter each of his punches, then pummel, body blows or wait whenever he is open (bullet time for a first call) | the fight: win and the next opponent comes out; too late, and the opening is gone |
 | main | **Contra: the model is Player 2** (NES) | you play Player 1 on the handheld; a reflex soldier plays Player 2 and the model makes a partner's calls: cover you, lead or hang back, take a weapon or leave it for you, borrow a life. Hold R1 and tell it what to do | how far you get together; a careless partner takes your spread gun or drags the screen away from you |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
 | bonus | **Tennis (Atari 2600): the model aims** | the model aims every return | it seldom wins a point: what a small model cannot do yet |
@@ -56,15 +56,20 @@ finely it can run the turbo. Each question tells it how long its answer will tak
 would do to the temperature by then. Qualify (the 3RD time on the screen) and the next race starts; miss and it is
 game over.
 
-In Punch-Out!! Mac dodges every punch by himself (a reflex loop that knows when each one lands). The model runs the
-offence: whenever the opponent is open, reeling after a dodge or standing off defence (from the bell on), the game
-drops into bullet time (slow motion at the level's ratio) and the model calls PUMMEL (rapid jabs to the face until
-they are blocked), BODY (rapid body blows) or WAIT, and while Mac has a star, STAR: the uppercut (START). Mac loses a
-star each time he is hit and all of them when the round ends, so when to spend one is the model's call too. Each
-question carries its record in that situation, tries, hits and blocks, which is how it learns where an opponent is
-open: Glass Joe takes 5-6 head hits after a dodge and 3 while he stands, and blocks every body blow while he stands.
-A call that comes after the opening has closed is wasted. Win and the next opponent comes out; lose and it is a
-rematch; a third loss is game over.
+In Punch-Out!! Mac dodges every punch by himself (a reflex loop that knows when each one lands). The model has to
+find each opponent's weak spot. On each of his punches it calls DODGE, or a counter into the wind-up, to the FACE or
+the BODY (thrown at the frame where it lands, if it can). When he is open, reeling after a dodge, stunned by a counter
+or standing off defence (from the bell on), it calls PUMMEL (rapid jabs to the face until they are blocked), BODY
+(rapid body blows) or WAIT, and while Mac has a star, STAR: the uppercut (START). Every call stands: Mac acts on it
+each time that turn comes again, and the model can change it at any time. The first opening of each kind drops into
+bullet time (slow motion at the level's ratio) until the call comes; a call that comes after the opening has closed is
+wasted. Each question carries every choice's record on that turn, across all fights with this opponent: tries,
+dodges, counters landed, stars, hits and knockdowns, blocks, and the times Mac was hit. A dodge also counts the hits
+in the openings after it. The record and the calls are kept across games (`state/punchout_record.json`), so what the
+model finds against an opponent it uses next time. The weak spots are the game's own. Glass Joe takes 5-6 head hits
+after a dodge. King Hippo blocks everything until a face counter into his big punch opens his mouth, and then his
+belly is open. Bald Bull's charge goes down to one body blow at the right moment. Win and the next opponent comes out;
+lose and it is a rematch; a third loss is game over.
 
 Contra has no levels: you are playing too, so it runs in real time. The game starts itself with 2 players; you are
 Player 1 on the handheld's controls and the model is Player 2 (on RetroArch's network remote pad). A reflex soldier
