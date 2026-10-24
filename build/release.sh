@@ -28,7 +28,8 @@ sh -n "$INST" || die "$INST does not parse"
 BUILT=$(tar -xzOf "$TGZ" $NAME/BUILD.txt)
 [ "$(echo "$BUILT" | head -1)" = "$NAME $VER $(git rev-parse HEAD)" ] || die "$TGZ is not $NAME $VER from this commit"
 LIST=$(tar -tzf "$TGZ")
-BAD=$(echo "$LIST" | grep -E '__pycache__|/logs/|/state/|/models/|prefs\.json|\.(zip|7z|nes|a26|gguf|state[0-9]*|srm|core)$' || true)
+[ "$(echo "$LIST" | grep -c '\.nes$')" = 1 ] && echo "$LIST" | grep -q '^autogamer/pickleball/pickleball\.nes$' || die "the tarball must carry exactly one ROM, the bundled pickleball.nes"
+BAD=$(echo "$LIST" | grep -v '^autogamer/pickleball/pickleball\.nes$' | grep -E '__pycache__|/logs/|/state/|/models/|prefs\.json|\.(zip|7z|nes|a26|gguf|state[0-9]*|srm|core)$' || true)
 [ -z "$BAD" ] || die "the tarball carries files it must not: $BAD"
 tar -xzOf "$TGZ" | grep -aE '192\.168\.[0-9]+\.[0-9]+' >/dev/null && die "the tarball carries a LAN address"
 (cd dist && sha256sum "$(basename "$TGZ")" > "$(basename "$TGZ").sha256")
