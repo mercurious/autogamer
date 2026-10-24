@@ -13,8 +13,8 @@ import fnmatch, os, sys, zipfile, zlib
 
 ROMS = os.environ.get("AG_ROMS", "/storage/roms")
 HOME = os.environ.get("AG_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXTS = {"nes": (".nes",), "atari2600": (".a26", ".bin")}
-SYSNAME = {"nes": "NES", "atari2600": "Atari 2600"}
+EXTS = {"nes": (".nes",), "atari2600": (".a26", ".bin"), "genesis": (".md", ".bin", ".gen", ".smd")}
+SYSNAME = {"nes": "NES", "atari2600": "Atari 2600", "genesis": "Genesis"}
 
 # section: main (a model under pressure, the point of autogamer) or bonus. model: the language model it needs (None:
 # a bot plays, no model); tts: it speaks. crc: the known dumps (lower-case hex; NES both headerless and with header).
@@ -49,6 +49,12 @@ GAMES = [
          about=("You are Player 1; the model plays Player 2 beside you:",
                 "it covers, leads or hangs back, and leaves you the",
                 "best weapon. The game starts itself with 2 players.")),
+    dict(id="sor2-coop", section="main", title="Streets of Rage 2: the model is Player 2", system="genesis",
+         core="genesis_plus_gx", dump="Streets of Rage 2 (USA)", crc=("e01fa526",), model="e4b", tts=True,
+         names=("Streets of Rage 2 (USA)*", "Streets of Rage 2.*", "Streets of Rage 2 (*"),
+         about=("You are Player 1; the model fights beside you as",
+                "Player 2: whom to take on, who gets the food. Pick",
+                "2 PLAYERS; the model picks its own fighter.")),
     dict(id="pickleball-coop", section="main", title="NES Pickleball: your partner talks", system="nes", core="fceumm",
          dump="NES Pickleball v0.0.1 (bundled)", crc=("8eff3aa6", "1d55c8a7"), model="e4b", tts=True,
          bundled="pickleball/pickleball.nes", names=("Pickleball*", "pickleball*", "NES Pickleball*"),

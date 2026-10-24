@@ -1,9 +1,10 @@
 #!/bin/sh
 # Autogamer installer. Runs ON the handheld, from the unpacked release directory.
 #   ./install.sh [--no-e4b] [--no-talk] [--no-models]      ./install.sh --uninstall
-#   --no-e4b     skip gemma-4-E4B (5.2 GB): Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B, which
-#                thinks faster and worse
-#   --no-talk    skip Qwen3-ASR (1 GB): you cannot talk to Contra's Player 2 or your pickleball partner (hold R1)
+#   --no-e4b     skip gemma-4-E4B (5.2 GB): Tetris, NES Tennis, Excitebike, Punch-Out!!, Contra and Streets of Rage 2
+#                then play with E2B, which thinks faster and worse
+#   --no-talk    skip Qwen3-ASR (1 GB): you cannot talk to Player 2 in Contra or Streets of Rage 2, or your
+#                pickleball partner (hold R1)
 #   --no-models  skip the downloads (the models directory already has them)
 # The models go to llamatalk's shared models directory, which every app that bundles llamatalk uses (Retro Voice
 # Chat, for one): models already there are not downloaded again. Which directory: AG_MODELS if set, else the shared

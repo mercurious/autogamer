@@ -63,8 +63,8 @@ ok(p == os.path.join(H, "pickleball", "pickleball.nes") and v, "a bundled game: 
 ok("reinstall" in games.need(pb), "a bundled game that is missing says to reinstall")
 
 ids = [g["id"] for g in games.GAMES]
-ok(len(ids) == len(set(ids)) == 11, "eleven games, unique ids")
-ok([g["section"] for g in games.GAMES] == ["main"] * 8 + ["bonus"] * 3, "eight main games, then three bonus")
+ok(len(ids) == len(set(ids)) == 12, "twelve games, unique ids")
+ok([g["section"] for g in games.GAMES] == ["main"] * 9 + ["bonus"] * 3, "nine main games, then three bonus")
 ok(all(g.get("bundled") == "pickleball/pickleball.nes" for g in games.GAMES if g["id"].startswith("pickleball")), "the pickleball games use the bundled ROM")
 ok(all(re.fullmatch(r"[0-9a-f]{8}", c) for g in games.GAMES for c in g["crc"]), "CRCs are 8 lower-case hex digits")
 ok(all(len(g["crc"]) == 2 for g in games.GAMES if g["system"] == "nes"), "NES games know the dump with and without header")

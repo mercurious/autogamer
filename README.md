@@ -1,7 +1,7 @@
 # Autogamer
 
 A small language model plays retro games on a handheld while you watch: it places Tetris pieces, aims tennis
-returns, runs a motocross engine, picks its moments to attack in a boxing ring, fights beside you as Player 2 in Contra, is your talking doubles partner in NES Pickleball, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
+returns, runs a motocross engine, picks its moments to attack in a boxing ring, fights beside you as Player 2 in Contra and Streets of Rage 2, is your talking doubles partner in NES Pickleball, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
 no cloud and no account. The model is slow, so the games run in slow motion at a level you choose. That makes a
 contest: at Hard it keeps up, at Expert the game runs at real speed and the model falls behind.
 
@@ -25,6 +25,7 @@ One **Autogamer** entry under Ports opens a menu:
 | main | **Excitebike: the model rides the turbo** | a reflex rider steers, jumps and lands; the model calls turbo or cruise, each call holding until the next | the race clock against the qualifying time; too slow to ease off, and the engine overheats |
 | main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model looks for each opponent's weak spot: dodge or counter each of his punches, then pummel, body blows or wait whenever he is open (bullet time for a first call) | the fight: win and the next opponent comes out; too late, and the opening is gone |
 | main | **Contra: the model is Player 2** (NES) | you play Player 1 on the handheld; a reflex soldier plays Player 2 and the model makes a partner's calls: cover you, lead or hang back, take a weapon or leave it for you, borrow a life. Hold R1 and tell it what to do | how far you get together; a careless partner takes your spread gun or drags the screen away from you |
+| main | **Streets of Rage 2: the model is Player 2** (Genesis) | you play Player 1; a reflex brawler plays Player 2 and the model makes a partner's calls: help you, split the crowd, gang up on the toughest punk, eat the food or leave it for you, use a continue. Hold R1 and tell it what to do | how far you get together; a partner that leaves you surrounded, or eats the chicken you needed |
 | main | **NES Pickleball: your partner talks** (NES, bundled) | you play doubles with the cartridge's computer partner, and it talks: it calls the score, chatters, and the model makes its calls between points (take the middle, come up, stay back, switch, be patient, attack). Hold R1 and tell it what to do | a game to 11 with a partner that listens; whether its calls win points, and what it says back |
 | main | **NES Pickleball: an exhibition, called** (NES, bundled) | the cartridge plays doubles against itself; four voices and the umpire call it, no model | a match with every score call, "mine!", "bounce it!", the umpire's faults |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
@@ -112,6 +113,34 @@ may change its call to answer you. Speech recognition is Qwen3-ASR-0.6B, on the 
 the game runs). It needs a microphone: the Flip 2's own where its device tree powers it, else a USB-C, Bluetooth or
 headset mic. `AG_TALK=0` turns it off.
 
+### Streets of Rage 2
+
+Streets of Rage 2 is the first Genesis game (Genesis Plus GX). Like Contra it runs in real time with no levels. At
+the title you pick 2 PLAYERS and your fighter; Player 2 takes the one its cursor is on (pick 1 PLAYER and it joins
+with START). A reflex brawler plays Player 2 from the game's memory: it walks into its target's lane, combos, turns
+to face it, opens with a flying kick from a distance, works a grab (knees, then the throw), wriggles out of one,
+throws its special when two punks box it in (the special costs a little health), keeps out of your line (partners
+can hit each other) and walks over food to eat it. The model makes the calls a partner makes, each standing until
+the next: HELP (come to you and fight whoever is on you), SPLIT (take on the punks away from you and draw them
+off), FOCUS (gang up with you on the toughest punk on the screen, a Signal or a boss); with food on the ground, EAT
+it (otherwise it is left for you); and when Player 2 is out of lives, CONTINUE or SIT OUT. Each question carries how
+you are doing (health, lives, health lost in the last minute), the punks and whom they are on, and its record with
+each call this stage: the health you and it lost while the call stood, and the punks put away. The record is also
+kept across games (`state/sor2_record.json`, per stage and call, and apart for games with the stand-in).
+`AG_SR_STANDIN=1` has a reflex brawler play Player 1 too, to watch without a partner.
+
+Hold **R1** and talk to Player 2 as in Contra:
+
+| say | Player 2 |
+|---|---|
+| "help me", "cover me", "get them off me" | HELP: comes to you |
+| "split up", "take the others", "draw them off" | SPLIT: takes the punks away from you |
+| "the big guy", "focus", "gang up on him" | FOCUS: the toughest punk, with you |
+| "hang back", "wait" ... then "go" | fights only what comes to it, then goes back to its call |
+| "eat it", "you need it" / "leave it", "that's mine" | eats the food on the screen / leaves it for you |
+| "continue" / "don't continue" | uses a continue now if it is out / never does |
+| "your call" | the model makes the calls again |
+
 ### NES Pickleball
 
 [NES Pickleball](https://github.com/mercurious/nes-pickleball) is a homebrew cartridge (1985 rules: side-out scoring to 11, the two-bounce rule, the
@@ -178,7 +207,7 @@ Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with 
 - 12 GB of RAM tested; 8 GB untested.
 - Storage: 4.7 GB for the models (9.8 GB with E4B, `--no-e4b` to skip it; `--no-talk` skips the 1 GB of speech
   recognition), unless another llamatalk app already has them; about 17 MB for the programs.
-- For talking to Contra's Player 2 or your pickleball partner: a microphone (see above).
+- For talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner: a microphone (see above).
 - Optional: MangoHud, for the bar across the top (fps, frame times, the model at work).
 
 ## Install
@@ -197,8 +226,8 @@ for example on the SD card:
 ```sh
 tar xzf autogamer-aarch64.tar.gz && cd autogamer
 ./install.sh              # the models (if not already on the device), the Ports entry, and which ROMs it found
-./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B)
-./install.sh --no-talk    # without speech recognition (no talking to Contra's Player 2 or your pickleball partner)
+./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike, Punch-Out!!, Contra and Streets of Rage 2 then play with E2B)
+./install.sh --no-talk    # without speech recognition (no talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner)
 ```
 
 Then refresh the game lists in EmulationStation and start **Autogamer** from Ports. The models go to
@@ -224,6 +253,7 @@ Put your own copies in ROCKNIX's ROM folders, zipped or not (`.zip`, `.nes`, `.a
 | Excitebike (NES) | `roms/nes` | Excitebike (Nintendo, 1984) | `49aeb3a6` without the header, `6faa4584` with an old "DiskDude!" header |
 | Mike Tyson's Punch-Out!! (NES) | `roms/nes` | Mike Tyson's Punch-Out!! (Nintendo, 1987) | `2c818014` without the header, `3df8e170` with it |
 | Contra (NES) | `roms/nes` | Contra (Konami, 1988) | `f6035030` without the header, `c50a8304` with it |
+| Streets of Rage 2 (Genesis) | `roms/genesis` | Streets of Rage 2 (USA) | `e01fa526` |
 | Tennis (Atari 2600) | `roms/atari2600` | Activision, 1981 | `0a42515b` |
 | NES Pickleball | bundled (`pickleball/pickleball.nes`; a copy in `roms/nes` works too) | v0.0.1, the homebrew cartridge | `8eff3aa6` without the header, `1d55c8a7` with it |
 
@@ -255,12 +285,12 @@ Environment variables for `app/autogamer.sh` or `app/run.sh` (set them in the Po
 
 | variable | meaning |
 |---|---|
-| `AG_GAME` | play this game (`tetris-model`, `ntennis-model`, `excitebike-model`, `punchout-model`, `contra-coop`, `pickleball-coop`, `pickleball-watch`, `tennis`, `tennis-model`, `tetris`, `smb`) without the menu |
+| `AG_GAME` | play this game (`tetris-model`, `ntennis-model`, `excitebike-model`, `punchout-model`, `contra-coop`, `sor2-coop`, `pickleball-coop`, `pickleball-watch`, `tennis`, `tennis-model`, `tetris`, `smb`) without the menu |
 | `AG_LEVEL` | the level, 0-3 (Hard to Expert), without the picker; `AG_PICK=0`: the last one, without the picker |
 | `AG_MODELS`, `AG_ROMS` | the models directory (default: llamatalk's shared one), the ROM folders (default `/storage/roms`) |
-| `AG_TETRIS_MODEL`, `AG_NTENNIS_MODEL`, `AG_EXCITEBIKE_MODEL`, `AG_PUNCHOUT_MODEL`, `AG_CONTRA_MODEL`, `AG_PICKLEBALL_MODEL`, `AG_TENNIS_MODEL` | another model (gguf basename in the models directory) |
+| `AG_TETRIS_MODEL`, `AG_NTENNIS_MODEL`, `AG_EXCITEBIKE_MODEL`, `AG_PUNCHOUT_MODEL`, `AG_CONTRA_MODEL`, `AG_SOR2_MODEL`, `AG_PICKLEBALL_MODEL`, `AG_TENNIS_MODEL` | another model (gguf basename in the models directory) |
 | `AG_PB_LEVEL`, `PB_VOICES` | NES Pickleball: the cartridge's level 1-5 (the exhibition's default 3); the five Pocket TTS voices, slots 0-3 and the umpire (default `alba,jean,marius,cosette,george`) |
-| `AG_TALK=0` | no speech recognition: no talking to your partner in Contra or NES Pickleball |
+| `AG_TALK=0` | no speech recognition: no talking to your partner in Contra, Streets of Rage 2 or NES Pickleball |
 | `AG_TL_GAMELEVEL` | Tetris: the NES level to start at (default: from the model's think time) |
 | `AG_NT_CPU` | NES Tennis: the game's own computer level, 1-5 (default 1) |
 | `AG_EB_TRACK` | Excitebike: the track the series starts on, 1-5 (default 1) |
@@ -282,5 +312,5 @@ seconds apart, each one visible on the screen, and a clock that keeps running wh
 ## Licence
 
 MIT, see `LICENSE`. The runtime it bundles and the models it downloads have their own licences: see
-`THIRD_PARTY.md`. NES Pickleball is the author's own (MIT). Tetris, Tennis, Excitebike, Punch-Out!!, Contra and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
+`THIRD_PARTY.md`. NES Pickleball is the author's own (MIT). Tetris, Tennis, Excitebike, Punch-Out!!, Contra, Streets of Rage and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
 with or endorsed by them.
