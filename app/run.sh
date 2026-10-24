@@ -17,9 +17,11 @@
 #                 calling turbo or cruise, each call holding until the next: a turbo it is too slow to call off
 #                 overheats the engine. Slow-motion levels as for tetris-model, by a human's 1, 2, 3 s a call.
 #   punchout-model  Mike Tyson's Punch-Out!! (fceumm): punchout_llm.py, a reflex loop dodges every punch; the model
-#                 (E4B if installed, AG_PUNCHOUT_MODEL) runs the offence: when the opponent is open it calls pummel,
-#                 body blows or wait, in bullet time (the game runs in real time and slows down for each call). Levels
-#                 by a human's 0.5, 0.75, 1 s to see the opening.
+#                 (E4B if installed, AG_PUNCHOUT_MODEL) looks for each opponent's weak spot: on each of his punches it
+#                 calls dodge or a counter into the wind-up (face or body), and when he is open pummel, body blows or
+#                 wait, in bullet time the first time (the game runs in real time and slows down for that call). Its
+#                 record and calls are kept across games (state/punchout_record.json). Levels by a human's 0.5, 0.75,
+#                 1 s to see the opening.
 #   contra-coop   Contra (fceumm), 2 players: you play Player 1 on the handheld, contra_llm.py plays Player 2 (a
 #                 reflex soldier from RAM, contra.py; RetroArch's network remote for user 2) and the model (E4B if
 #                 installed, AG_CONTRA_MODEL) makes its calls: cover, lead or hang back, take or leave a weapon,
@@ -190,13 +192,14 @@ case $GAME in
       "$AG_MODEL_LABEL takes about $THINK s to call turbo or cruise; each call|holds until the next. Too slow to ease off, the engine overheats;|too careful, it misses the qualifying time: game over." ;;
   punchout-model)
     pick_model "${AG_PUNCHOUT_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts
-    export TL_CALIB="$ST/think_punchout_$AG_MODEL_LABEL.txt" AG_BULLET=1
+    export TL_CALIB="$ST/think_punchout_$AG_MODEL_LABEL.txt" AG_BULLET=1 \
+      AG_PO_RECORD="$ST/punchout_record.json"   # what the model finds against each opponent, across games
     case $AG_MODEL_LABEL in E4B) THINK=4.0 ;; *) THINK=2.7 ;; esac  # Excitebike's call times + a longer question: estimates
     [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB")
     # After a dodge Glass Joe stays open for a pummel 100 frames on (5-6 hits); later opponents close up sooner. A
     # human's 0.5, 0.75, 1 s to see the opening and call it.
     setup_levels "0.5 0.75 1" "AI PLAYS PUNCH-OUT!! (MODEL RUNS THE OFFENCE)" \
-      "Mac dodges by himself. $AG_MODEL_LABEL takes about $THINK s to call|pummel, body blows or wait when the opponent is open;|the game slows down for each call. Too late: the opening is gone." ;;
+      "Mac dodges by himself. $AG_MODEL_LABEL takes about $THINK s a call: dodge or counter|each punch, pummel, body blows or wait when he is open, to find|his weak spot. First calls slow the game; too late, the chance is gone." ;;
   contra-coop)
     pick_model "${AG_CONTRA_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts; start_asr
     export TL_CALIB="$ST/think_contra_$AG_MODEL_LABEL.txt" AG_CT_KONAMI=${AG_CT_KONAMI:-0} AG_CT_STANDIN=${AG_CT_STANDIN:-0} \
