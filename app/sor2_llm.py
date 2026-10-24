@@ -107,8 +107,8 @@ def hist_text(hist, stage):
         x = h.get(r)
         if not x or x["secs"] < 30: continue
         m = x["secs"] / 60
-        parts.append("%s %.0f min: player 1 lost %.0f health a minute, you %.0f, %.1f punks down a minute" % (
-            r.upper(), m, x["p1"] / m, x["p2"] / m, x["kos"] / m))
+        parts.append("%s %.0f min: player 1 lost %s health a minute, you %s, %.1f punks down a minute" % (
+            r.upper(), m, pct(x["p1"] / m), pct(x["p2"] / m), x["kos"] / m))
     return "; ".join(parts)
 
 def pct(hp): return "%d%%" % round(100 * hp / sor2.FULL)
@@ -134,10 +134,10 @@ def facts(st, rec, order, now, food, lost, past="", orders=""):
     foes = [o for o in st.enemies() if st.onscreen(o, 8)]
     lines = ["Streets of Rage 2, 2 players. Stage %d of 8: %s." % (st.stage() + 1, sor2.STAGES[st.stage()])]
     recent = sum(v for t, v in lost if time.time() - t < 60)
-    if not st.joined(HUMAN): lines.append("Player 1 (the human) is out of lives.")
+    if st.gameover(HUMAN): lines.append("Player 1 (the human) is out of lives.")
     else: lines.append("Player 1 (the human, %s): %s health, %d lives left, lost %s health in the last minute%s." % (
         st.who(HUMAN), pct(st.php(HUMAN)), st.lives(HUMAN), pct(recent), ", holds a %s" % st.weapon(HUMAN) if st.weapon(HUMAN) else ""))
-    lines.append("You (player 2, %s): %s." % (st.who(ME), "out of lives" if not st.joined(ME) else
+    lines.append("You (player 2, %s): %s." % (st.who(ME), "out of lives" if st.gameover(ME) else
                  "%s health, %d lives left" % (pct(st.php(ME)), st.lives(ME))))
     lines.append(crowd_text(st, foes))
     if food: lines.append("Food on the ground: %s." % food[2])
@@ -154,15 +154,15 @@ def facts(st, rec, order, now, food, lost, past="", orders=""):
 
 def chat_facts(st, order, now, orders=""):
     lines = ["Streets of Rage 2, 2 players. Stage %d of 8: %s." % (st.stage() + 1, sor2.STAGES[st.stage()]),
-             "Player 1 (the human): %s." % ("out of lives" if not st.joined(HUMAN) else "%s health, %d lives" % (pct(st.php(HUMAN)), st.lives(HUMAN))),
-             "You (player 2): %s." % ("out of lives" if not st.joined(ME) else "%s health, %d lives" % (pct(st.php(ME)), st.lives(ME)))]
+             "Player 1 (the human): %s." % ("out of lives" if st.gameover(HUMAN) else "%s health, %d lives" % (pct(st.php(HUMAN)), st.lives(HUMAN))),
+             "You (player 2): %s." % ("out of lives" if st.gameover(ME) else "%s health, %d lives" % (pct(st.php(ME)), st.lives(ME)))]
     if now: lines.append("Your standing call: %s." % now.upper())
     if orders: lines.append(orders)
     return "\n".join(lines + ["%s) %s" % ("ABCDE"[i], c) for i, c in enumerate(order)])
 
 def options(st, food, keep=None, may_continue=True):
-    if not st.joined(ME):
-        keys = ["continue", "sitout"] if may_continue else ["sitout"]
+    if st.gameover(ME):
+        keys = ["continue", "sitout"] if may_continue and not st.finished(ME) else ["sitout"]
         txt = dict(TEXT)
     else:
         foes = [o for o in st.enemies() if st.onscreen(o, 8)]
@@ -200,6 +200,7 @@ if __name__ == "__main__":
     t0 = time.time(); worker = None; thinks = []; pending = []; n = 0; mem = {}; prev = None
     role = [None]; hold = [False]; me = sor2.Fighter(ME); me.pick = picker(role, hold)
     stand = sor2.Fighter(HUMAN) if STANDIN else None
+    if stand: stand.lead = True                  # the stand-in pushes on when the screen is clear
     last_frame = [None, None]; held = [[], []]
     role_t = time.time(); stage = None; rec = {}; lost = []; food_said = set(); last_ask = 0
     hist = load_hist(); hist_t = time.time(); kos = 0
@@ -246,7 +247,7 @@ if __name__ == "__main__":
         if key == "nocontinue": order["cont"] = False; return REPLY["nocontinue"]
         if key == "continue":
             order["cont"] = True
-            if not st.joined(ME): pads[ME].tap("start", 0.08); return REPLY["continue_now"]
+            if st.gameover(ME): mem["cont"] = time.time(); return REPLY["continue_now"]
             return REPLY["continue"]
         if key == "yourcall": hold[0] = False; order.update(role=None, food=None); return REPLY["yourcall"]
 
@@ -282,7 +283,8 @@ if __name__ == "__main__":
                 if "PAUSED" in (ra.cmd("GET_STATUS") or ""): ra.cmd("PAUSE_TOGGLE", reply=False)
             st = sor2.read(ra)
             if not st: continue
-            if prev and (st.mode() != prev.mode() or st.joined(ME) != prev.joined(ME) or st.joined(HUMAN) != prev.joined(HUMAN)):
+            if prev and (st.mode() != prev.mode() or st.joined(ME) != prev.joined(ME) or st.joined(HUMAN) != prev.joined(HUMAN)
+                         or st.gameover(ME) != prev.gameover(ME) or st.gameover(HUMAN) != prev.gameover(HUMAN)):
                 log(dict(mode="%02x" % st.mode(), was="%02x" % prev.mode(), joined=[st.joined(0), st.joined(1)],
                          lives=[st.lives(0), st.lives(1)], hp=[st.php(0), st.php(1)], r2="%02x" % st.routine(st.p(ME))))
             if st.selecting():                       # the character screen: P2 takes its cursor's fighter
@@ -295,6 +297,11 @@ if __name__ == "__main__":
                 pads[ME].tap("start", 0.08); mem["join"] = time.time()     # a 1-player game: P2 joins with START
             if st.joined(ME): mem["joined_once"] = True
 
+            if mem.get("cont") and time.time() - mem.get("cont_tap", 0) > 0.7:   # a continue: START, START
+                if st.gameover(ME): pads[ME].tap("start", 0.08); mem["cont_tap"] = time.time()
+                if time.time() - mem["cont"] > 6 or not st.gameover(ME): mem["cont"] = None
+            if STANDIN and st.gameover(HUMAN) and not st.finished(HUMAN) and time.time() - mem.get("cont1", 0) > 0.7:
+                pads[HUMAN].tap("start", 0.08); mem["cont1"] = time.time()
             if time.time() - hist_t > 30:
                 close_role(); save_hist(hist); hist_t = time.time()
             if stage != st.stage():
@@ -306,11 +313,11 @@ if __name__ == "__main__":
             if prev and prev.in_stage():
                 for i in (0, 1):
                     d = prev.php(i) - st.php(i)
-                    if st.joined(i) and prev.joined(i) and 0 < d < sor2.FULL and st.lives(i) == prev.lives(i):
+                    if st.alive(i) and prev.alive(i) and 0 < d < sor2.FULL and st.lives(i) == prev.lives(i):
                         if i == HUMAN: lost.append((time.time(), d))
                         if role[0] in ROLES: rec.setdefault(role[0], new_rec())["p%d" % (i + 1)] += d
                         bump(role[0], **{"p%d" % (i + 1): d})
-                    if prev.joined(i) and st.lives(i) < prev.lives(i) or prev.joined(i) and not st.joined(i):
+                    if prev.joined(i) and st.lives(i) < prev.lives(i) or st.gameover(i) and not prev.gameover(i):
                         log(dict(lost="P%d" % (i + 1), stage=stage, role=role[0], lives=st.lives(i),
                                  x=prev.x(prev.p(i)), y=prev.y(prev.p(i)), note=(me if i == ME else stand).note if (i == ME or stand) else ""))
                 gone = [o for o in prev.enemies() if o not in st.enemies() or st.oid(o) != prev.oid(o)]
@@ -341,7 +348,7 @@ if __name__ == "__main__":
                 pick = b["keys"][idx] if 0 <= idx < len(b["keys"]) else b["keys"][0]
                 n += 1; f = b["food"]; spoken = None
                 if pick == "continue":
-                    if not st.joined(ME): pads[ME].tap("start", 0.08); spoken = SAY["continue"]
+                    if st.gameover(ME): mem["cont"] = time.time(); spoken = SAY["continue"]
                 elif pick == "sitout": spoken = SAY["sitout"] if mem.get("sat") != stage else None; mem["sat"] = stage
                 else:
                     eat = pick == "eat" if not order["food"] else order["food"] == "eat"
@@ -366,7 +373,8 @@ if __name__ == "__main__":
             if me.want is not None and not st.on(me.want): me.want = None
             if role[0] is None: role[0] = "help"
             if not busy() and (time.time() - last_ask > 2 or told or food and food[0] not in food_said and not pending):
-                if st.joined(ME) or st.joined(HUMAN): ask_now(st, food)
+                quiet = st.alive(ME) and not food and not told and not [o for o in st.enemies() if st.onscreen(o, 8)]
+                if (st.joined(ME) or st.joined(HUMAN)) and not quiet: ask_now(st, food)
 
             for i, sd in ((ME, me), (HUMAN, stand)):
                 if not sd: continue

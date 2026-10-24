@@ -8,11 +8,13 @@
 # is at A^1). Objects of 0x100 bytes: EF00 player 1, F000 player 2, F100-F600 six enemy slots; then F700-F9FF six item
 # slots of 0x80. In each: +00 routine (0 = empty; 2 stand/walk, 4 and 28 hit, 06/08 knocked out, 0A thrown, 0C/0E
 # held by someone from the front/behind, 14 attacking, 1A/1C holding someone from the front/behind (B: knees, then
-# a throw), 22 jumping), +06 sprite y (y minus height), +0C ID (below), +0E animation (bit 0: facing right),
+# a throw), 22 jumping, 34 choosing a fighter after a continue, 38 out of lives: CONTINUE offered, START; 3C the
+# high-score name, no continues left), +06 sprite y (y minus height), +0C ID (below), +0E animation (bit 0: facing right),
 # +20 x, +24 y (world px; y grows down the screen), +38 the weapon a player holds, +50 invincibility timer, +78 name
 # (ASCII), +80 health (0x68 full, a word), +82 lives left after this one (punks: stars). FC03 game mode (0x18
-# select, 0x14 in a stage), FC10 frame counter, FC22 the foreground plane's horizontal scroll (minus the
-# camera's x: the screen's left edge in world px), FC3C time (BCD), FC6B difficulty, FD0F stage (0-7).
+# select, 0x14 in a stage), FC10 frame counter, FC43 the stage times 2, FC22 the foreground plane's horizontal scroll (minus the
+# camera's x: the screen's left edge in world px), FC26 its vertical scroll (the camera's y: the top edge), FC3C time (BCD), FC6B difficulty, FD0F the
+# stage a game starts at (an option).
 import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,6 +36,7 @@ DOWN = {0x04, 0x06, 0x08, 0x0a, 0x28}   # hit, knocked out, thrown
 HELD = {0x0c, 0x0e}                  # someone has grabbed it
 HOLDING = {0x1a, 0x1c}               # it has grabbed someone
 FREE = {0x02, 0x14}                  # routines where the pad steers (stand/walk, attacking)
+GAMEOVER, CHOOSING, NAME = 0x38, 0x34, 0x3c   # out of lives (START continues), choosing a fighter (START again), no continues left
 
 class State:
     """one poll: m = the 0x1100 bytes from EF00 in the game's own (big-endian) order"""
@@ -48,8 +51,9 @@ class State:
     def in_stage(self): return self.mode() == 0x14
     def selecting(self): return self.mode() == 0x18
     def frame(self): return self.w(0xfc10)
-    def stage(self): return self.b(0xfd0f) & 7
+    def stage(self): return (self.b(0xfc43) >> 1) & 7
     def cam(self): return -self.sw(0xfc22)
+    def cam_y(self): return self.sw(0xfc26)
     def clock(self): v = self.b(0xfc3c); return (v >> 4) * 10 + (v & 15)
 
     # any object: slot base address
@@ -73,7 +77,9 @@ class State:
     def php(self, i): return self.hp(self.p(i))
     def weapon(self, i): return WEAPONS.get(self.b(self.p(i) + 0x39))
     def who(self, i): return PLAYERS.get(self.oid(self.p(i)), "player %d" % (i + 1))
-    def alive(self, i): return self.joined(i) and self.php(i) > 0
+    def gameover(self, i): return self.joined(i) and self.routine(self.p(i)) in (GAMEOVER, CHOOSING, NAME)
+    def finished(self, i): return self.joined(i) and self.routine(self.p(i)) == NAME
+    def alive(self, i): return self.joined(i) and self.php(i) > 0 and not self.gameover(i)
     def free(self, i): return self.routine(self.p(i)) in FREE
 
     # enemies and items
@@ -119,6 +125,7 @@ class Fighter:
         self.n = 0; self.note = ""; self.target = None; self.mash = 0; self.special_t = 0
         self.tgt_t = 0; self.tgt_hp = None; self.ban = {}; self.stall = None; self.last = None
         self.seq = []; self.kick_t = 0; self.lead = False   # buttons queued a poll each (a flying kick); push on alone
+        self.push = (None, 0, 0)                            # pushing on: (best x, when it last gained, which way)
 
     def me(self, st): return st.p(self.i)
 
@@ -161,7 +168,7 @@ class Fighter:
             self.target = None; self.note = "follow"
             if self.home: return self.walk(st, self.home[0], self.home[1], slack=10)
             o = st.p(1 - self.i)
-            if self.lead or not st.alive(1 - self.i): return self.walk(st, st.cam() + 260, my, slack=6)
+            if self.lead or not st.alive(1 - self.i): return self.push_on(st)
             if st.alive(1 - self.i):
                 side = -1 if mx < st.x(o) else 1
                 return self.walk(st, st.x(o) + side * 36, st.y(o) + (10 if my >= st.y(o) else -10), slack=14)
@@ -194,6 +201,15 @@ class Fighter:
         if abs(dy) > 3 and abs(dx) < 30:             # into its lane from out of its reach first
             return self.walk(st, tx + side * 40, ty, slack=4)
         return self.walk(st, tx + side * 24, ty, slack=4)
+
+    def push_on(self, st):
+        """the screen is clear: walk on to the right; where that gains nothing for 2 s (the street turns, a wall),
+        go right and up, then right and down"""
+        mx = st.x(self.me(st)); best, t, way = self.push
+        if best is None or mx > best + 4: self.push = (mx, self.n, way); best, t = mx, self.n
+        elif self.n - t > 120: way = (way + 1) % 3; self.push = (mx, self.n, way)
+        self.note = "push on"
+        return ["right"] + ([], ["up"], ["down"])[way]
 
 def nearest(st, foes, x, y):
     return min(foes, key=lambda o: abs(st.x(o) - x) + 2 * abs(st.y(o) - y)) if foes else None
