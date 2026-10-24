@@ -1,10 +1,11 @@
 #!/bin/sh
-# Autogamer never carries a game: no ROM, no archive, no save state, no RAM or screen dump. Fails if the tree has a
-# file with a ROM's extension, an iNES header, or a binary over 64 KB (the bundled llamatalk/ excepted). build/build.sh and
-# CI run it. Usage: test/check_no_roms.sh [DIR]   (default: the repository's tracked files, else the directory)
+# Autogamer never carries a commercial game: no ROM, no archive, no save state, no RAM or screen dump. Fails if the
+# tree has a file with a ROM's extension, an iNES header, or a binary over 64 KB (the bundled llamatalk/ excepted, and
+# in a release directory pickleball/, the author's own homebrew cartridge). build/build.sh and CI run it.
+# Usage: test/check_no_roms.sh [DIR]   (default: the repository's tracked files, else the directory)
 R=${1:-$(cd "$(dirname "$0")/.." && pwd)}; cd "$R" || exit 2
 if [ -z "${1:-}" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then L=$(git ls-files)
-else L=$(find . -path ./build/work -prune -o -path ./dist -prune -o -path ./llamatalk -prune -o -path ./.git -prune -o -type f -print | sed 's|^\./||'); fi
+else L=$(find . -path ./build/work -prune -o -path ./dist -prune -o -path ./llamatalk -prune -o -path ./pickleball -prune -o -path ./.git -prune -o -type f -print | sed 's|^\./||'); fi
 bad=0
 echo "$L" | while IFS= read -r f; do
   [ -f "$f" ] || continue

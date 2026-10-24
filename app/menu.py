@@ -21,7 +21,7 @@ def have(f): return bool(M) and os.path.isfile(os.path.join(M, f))
 
 def model_line(g):
     """(text, playable) for the game's model: the bigger one falls back to E2B, as run.sh does"""
-    if not g["model"]: return "No model: a bot plays.", True
+    if not g["model"]: return g.get("nomodel", "No model: a bot plays.") + ("" if have(TTS) or not g["tts"] else " No voice (Pocket TTS is not installed)."), True
     if g["model"] == "e4b" and have(GGUF["e4b"]): name = "Gemma 4 E4B"
     elif have(GGUF["e2b"]): name = "Gemma 4 E2B" + (" (E4B is not installed)" if g["model"] == "e4b" else "")
     else: return "The model is missing: run install.sh.", False

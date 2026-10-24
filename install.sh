@@ -3,11 +3,12 @@
 #   ./install.sh [--no-e4b] [--no-talk] [--no-models]      ./install.sh --uninstall
 #   --no-e4b     skip gemma-4-E4B (5.2 GB): Tetris, NES Tennis, Excitebike, Punch-Out!! and Contra then play with E2B, which
 #                thinks faster and worse
-#   --no-talk    skip Qwen3-ASR (1 GB): you cannot talk to Contra's Player 2 (hold R1 and give it orders)
+#   --no-talk    skip Qwen3-ASR (1 GB): you cannot talk to Contra's Player 2 or your pickleball partner (hold R1)
 #   --no-models  skip the downloads (the models directory already has them)
 # The models go to llamatalk's shared models directory, which every app that bundles llamatalk uses (Retro Voice
 # Chat, for one): models already there are not downloaded again. Which directory: AG_MODELS if set, else the shared
-# one if this device has it, else ./models. It brings no games: it says which ROMs it found and which to add.
+# one if this device has it, else ./models. It brings no games but its own NES Pickleball (bundled): it says which
+# ROMs it found and which to add.
 # Env: AG_MODELS, AG_PORTS (default /storage/roms/ports), AG_ROMS (default /storage/roms).
 set -u
 H=$(cd "$(dirname "$0")" && pwd); P=${AG_PORTS:-/storage/roms/ports}; LTM=$H/llamatalk/models.sh
@@ -49,6 +50,6 @@ for f in "$P"/*.sh; do
 done
 sed -e "s|@AG_HOME@|$H|g" "$H/ports/$ENTRY" > "$P/$ENTRY" && chmod +x "$P/$ENTRY" && echo "port $P/$ENTRY"
 
-echo "Games (autogamer brings none: add your own copies; see README):"
+echo "Games (autogamer brings only its own NES Pickleball; add your own copies of the others; see README):"
 python3 "$H/app/games.py" status
 echo "Done. Refresh the game lists in EmulationStation; Autogamer is under Ports."

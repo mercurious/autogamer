@@ -25,6 +25,16 @@
 #                 installed, AG_CONTRA_MODEL) makes its calls: cover, lead or hang back, take or leave a weapon,
 #                 borrow a life. Real time, no levels (you are playing too). AG_CT_KONAMI=1: the 30-lives code at the
 #                 title; AG_CT_STANDIN=1: a reflex soldier plays Player 1 as well (to watch without a human).
+#   pickleball-coop  NES Pickleball (fceumm; the bundled homebrew cartridge, pickleball/): 1 PLAYER DOUBLES, you and
+#                 the cartridge's computer partner. Its sidecar (pickleball/sidecar/pickleball_coop.py) talks to the
+#                 cartridge through its RAM mailbox: every player gets a Pocket TTS voice (the score call through the
+#                 serve gate, the chatter, the umpire), the model (E4B if installed, AG_PICKLEBALL_MODEL) makes the
+#                 partner's call between points (middle, up or back, switch, patient or attack) and you hold R1 to
+#                 give it orders (talk.py). Real time, no levels; the cartridge's own level (1-5) from its title menu
+#                 (AG_PB_LEVEL presets it). The record across games: state/pickleball_record.json. The voices are
+#                 rendered into state/pickleball_voices at the first start (a few minutes, once).
+#   pickleball-watch  NES Pickleball EXHIBITION: the cartridge plays itself at AG_PB_LEVEL (default 3) and four
+#                 voices and the umpire call it; no model.
 #   tennis        Activision Tennis (Atari 2600, stella): play.py vs the CPU, narrate.py calls the match (E2B, Pocket TTS)
 #   tennis-model  Activision Tennis: the model aims every return (tennis_llm.py; E2B, AG_TENNIS_MODEL), play.py's reflex
 #                 loop runs to the ball. Slow-motion levels; a ball the model has not answered in time is missed.
@@ -39,7 +49,9 @@
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
 #   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL /
 #   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL / AG_CONTRA_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
-#   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_TALK=0 (contra-coop: no talking to Player 2, no Qwen3-ASR), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
+#   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_TALK=0 (contra-coop, pickleball-coop: no talking to your partner,
+#   no Qwen3-ASR), AG_PB_LEVEL (pickleball: the cartridge's level), PB_VOICES (pickleball: five Pocket TTS voices,
+#   slots 0-3 and the umpire; default alba,jean,marius,cosette,george), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
 #   AG_60HZ=0 (leave the panel at 120 Hz), AG_RA_CFG (one more RetroArch config file, appended last)
 # Cores (SM8250): RetroArch and the players on 0-3, the LLM on 4-7, TTS on 6-7. Unpinned, RetroArch wandered onto
 # 4-7 and the LLM's point calls gave it 23 frames over 25 ms a minute; pinned to 0-3, 1.
@@ -203,7 +215,21 @@ case $GAME in
       AG_CT_RECORD="$ST/contra_record.json"   # what the model learns across games
     case $AG_MODEL_LABEL in E4B) THINK=4.5 ;; *) THINK=3 ;; esac   # Punch-Out!!'s call times + a longer question: estimates
     [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB"); export TL_THINK0=$THINK ;;
+  pickleball-coop)
+    pick_model "${AG_PICKLEBALL_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts; start_asr
+    export TL_CALIB="$ST/think_pickleball_$AG_MODEL_LABEL.txt" PB_RECORD="$ST/pickleball_record.json" \
+      PB_CACHE="$ST/pickleball_voices" PB_LEVEL=${AG_PB_LEVEL:-} PB_TALK=${AG_CT_VOICE:-0} AG_APP="$V"
+    case $AG_MODEL_LABEL in E4B) THINK=4.5 ;; *) THINK=3 ;; esac   # Contra's call times: estimates
+    [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB"); export TL_THINK0=$THINK; VOICE_GAME=1 ;;
+  pickleball-watch)
+    start_tts; export PB_CACHE="$ST/pickleball_voices" PB_LEVEL=${AG_PB_LEVEL:-3} AG_APP="$V"; VOICE_GAME=1 ;;
 esac
+# the pickleball games' voices (Pocket TTS, rendered once into state/): the sidecar renders what is missing itself,
+# but the first start renders all of it before the game so the first score call is not late
+PB_CACHE_READY=1
+if [ -n "${VOICE_GAME:-}" ] && [ "${TL_TTS:-0}" = 1 ]; then
+  [ -f "$PB_CACHE/.complete" ] || PB_CACHE_READY=""
+fi
 
 # The panel at 60 Hz for the session (the Flip 2 runs 120): with autogamer-60hz.cfg RetroArch paces by vsync, not by
 # PulseAudio's 20 ms period. Put back on exit. AG_60HZ=0 keeps the panel as it is (and RetroArch's own pacing).
@@ -268,8 +294,19 @@ if [ -n "$MODEL_GAME" ]; then
     excitebike-model) msg "The model ($AG_MODEL_LABEL) is loading; it will run the engine. SELECT changes the level (game speed)." ;;
     punchout-model) msg "The model ($AG_MODEL_LABEL) is loading; it will call the attacks. SELECT changes the level." ;;
     contra-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will be Player 2. You are Player 1: hands off until the game picks 2 PLAYER." ;;
+    pickleball-coop) msg "Your partner's brain ($AG_MODEL_LABEL) is loading. You are player 1; the menu is set for you. Hold R1 to talk to your partner." ;;
   esac
   wait_llm "The model ($AG_MODEL_LABEL)"
+  echo "ready" > /dev/shm/autogamer/hud.txt
+fi
+# the pickleball voices, the first time: every phrase in five voices through Pocket TTS, a few minutes
+if [ -n "${VOICE_GAME:-}" ] && [ -z "$PB_CACHE_READY" ]; then
+  python3 "$V/ra.py" GET_STATUS | grep -q PLAYING && python3 "$V/ra.py" PAUSE_TOGGLE >/dev/null
+  echo "rendering the voices" > /dev/shm/autogamer/hud.txt
+  msg "The first start renders the voices (five Pocket TTS voices, a few minutes, once)..."
+  ( while sleep 15; do msg "Rendering the voices... $(find "$PB_CACHE" -name '*.wav' 2>/dev/null | wc -l) phrases so far"; done ) & TICK=$!
+  python3 "$H/pickleball/sidecar/cache.py" "$PB_CACHE" --wait 300 > "$O/cache.out" 2>&1 && touch "$PB_CACHE/.complete"
+  kill $TICK 2>/dev/null; msg "Voices ready."
   echo "ready" > /dev/shm/autogamer/hud.txt
 fi
 
@@ -294,6 +331,12 @@ case $GAME in
     python3 -u "$V/level.py" "$O" > "$O/level.out" 2>&1 & PIDS="$PIDS $!" ;;
   contra-coop)
     $P "$V/contra_llm.py" $FOREVER "$O/coop.jsonl" > "$O/play.out" 2>&1 &
+    PIDS="$PIDS $!" ;;
+  pickleball-coop)
+    $P "$H/pickleball/sidecar/pickleball_coop.py" $FOREVER "$O/coop.jsonl" --mode coop --mem > "$O/play.out" 2>&1 &
+    PIDS="$PIDS $!" ;;
+  pickleball-watch)
+    $P "$H/pickleball/sidecar/pickleball_coop.py" $FOREVER "$O/watch.jsonl" --mode watch --mem > "$O/play.out" 2>&1 &
     PIDS="$PIDS $!" ;;
   tennis-model)
     $P "$V/tennis_llm.py" $FOREVER "$O/shots.jsonl" > "$O/play.out" 2>&1 &

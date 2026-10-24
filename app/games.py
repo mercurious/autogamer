@@ -4,12 +4,15 @@
 # whole file, or for the NES also without its 16-byte iNES header. Files named like the game are tried first, then
 # every other file in the system's folder; a .zip is read without unpacking where its directory has the CRC. A file
 # named like the game whose CRC is unknown is still used, marked unverified (another version may be misread).
+# The one game autogamer brings is its own: NES Pickleball, a homebrew cartridge by the same author (MIT), shipped in
+# the release as pickleball/pickleball.nes ("bundled"); a copy in the ROM folder is used too.
 # Usage: games.py status            every game: its ROM (or what to add), for install.sh
 #        games.py shell GAME        SYS= CORE= ROM= ROM_OK= TITLE= for run.sh (ROM empty when there is none)
-# Env: AG_ROMS (default /storage/roms)
+# Env: AG_ROMS (default /storage/roms), AG_HOME (the installed autogamer, default the parent of this app/)
 import fnmatch, os, sys, zipfile, zlib
 
 ROMS = os.environ.get("AG_ROMS", "/storage/roms")
+HOME = os.environ.get("AG_HOME") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTS = {"nes": (".nes",), "atari2600": (".a26", ".bin")}
 SYSNAME = {"nes": "NES", "atari2600": "Atari 2600"}
 
@@ -46,6 +49,19 @@ GAMES = [
          about=("You are Player 1; the model plays Player 2 beside you:",
                 "it covers, leads or hangs back, and leaves you the",
                 "best weapon. The game starts itself with 2 players.")),
+    dict(id="pickleball-coop", section="main", title="NES Pickleball: your partner talks", system="nes", core="fceumm",
+         dump="NES Pickleball v0.0.1 (bundled)", crc=("8eff3aa6", "1d55c8a7"), model="e4b", tts=True,
+         bundled="pickleball/pickleball.nes", names=("Pickleball*", "pickleball*", "NES Pickleball*"),
+         about=("1 PLAYER DOUBLES: you and a computer partner that talks.",
+                "It calls the score, the model makes its calls between",
+                "points, and you hold R1 to give it orders. Real time.")),
+    dict(id="pickleball-watch", section="main", title="NES Pickleball: an exhibition, called", system="nes", core="fceumm",
+         dump="NES Pickleball v0.0.1 (bundled)", crc=("8eff3aa6", "1d55c8a7"), model=None, tts=True,
+         bundled="pickleball/pickleball.nes", names=("Pickleball*", "pickleball*", "NES Pickleball*"),
+         nomodel="No model: the cartridge's players play; four voices and the umpire call it.",
+         about=("The computer plays doubles against itself, and every",
+                "player has a voice: the score, the chatter, the umpire.",
+                "No model needed. Level 3 (AG_PB_LEVEL).")),
     dict(id="tennis", section="main", title="Tennis (Atari 2600): commentated", system="atari2600", core="stella",
          dump="Tennis (Activision, 1981)", crc=("0a42515b",), model="e2b", tts=True,
          names=("Tennis (USA)*", "Tennis.*", "Tennis (*"),
@@ -91,8 +107,11 @@ def crcs(path, system, deep=True):
     except (OSError, zipfile.BadZipFile, NotImplementedError): pass
     return out
 
-def find(g, roms=None):
-    """(path, verified) of the game's ROM, or (None, False)"""
+def find(g, roms=None, home=None):
+    """(path, verified) of the game's ROM, or (None, False): the bundled one first, then the ROM folder"""
+    if g.get("bundled"):
+        p = os.path.join(home or HOME, g["bundled"])
+        if os.path.isfile(p): return p, True
     d = os.path.join(roms or ROMS, g["system"])
     try: files = sorted(f for f in os.listdir(d) if os.path.isfile(os.path.join(d, f)))
     except OSError: return None, False
@@ -107,6 +126,7 @@ def find(g, roms=None):
 
 def need(g):
     """what to add for this game, in a line"""
+    if g.get("bundled"): return "The bundled %s is missing (%s): reinstall autogamer" % (g["dump"], os.path.join(HOME, g["bundled"]))
     return "Add your own %s for the %s to %s" % (g["dump"], SYSNAME[g["system"]], os.path.join(ROMS, g["system"]))
 
 def q(s): return "'" + str(s).replace("'", "'\\''") + "'"

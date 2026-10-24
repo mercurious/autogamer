@@ -27,7 +27,9 @@ printf '#!/bin/sh\nexec firefox\n' > "$T/ports/Firefox.sh"
 [ ! -e "$T/ports/AI Plays Tetris.sh" ] && [ ! -e "$T/ports/AI Plays Super Mario Bros.sh" ]; ok $? "the lab's entries are gone"
 [ -f "$T/ports/Firefox.sh" ]; ok $? "other entries stay"
 grep -q "exec \"$T/app/app/autogamer.sh\"" "$E"; ok $? "the Autogamer entry runs app/autogamer.sh"
-[ "$(grep -c MISSING "$T/out1")" = 9 ]; ok $? "no ROMs: all nine games say what to add"
+NB=$(python3 -c "import sys; sys.path.insert(0, '$R/app'); import games; print(sum(1 for g in games.GAMES if not g.get('bundled')))")
+[ "$(grep -c MISSING "$T/out1")" = "$NB" ]; ok $? "no ROMs: all $NB games that need a dump say what to add"
+if [ -f "$R/pickleball/pickleball.nes" ]; then grep -q 'ok .*NES Pickleball: your partner talks' "$T/out1"; ok $? "the bundled NES Pickleball is found"; fi
 
 # 2. fresh device, --no-e4b: ./models with e2b, tts and asr; --no-talk too: e2b and tts only
 fresh; "$T/app/install.sh" --no-e4b > "$T/out2" 2>&1; ok $? "fresh --no-e4b: install.sh runs"
