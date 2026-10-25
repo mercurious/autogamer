@@ -10,7 +10,7 @@ bad=0
 echo "$L" | while IFS= read -r f; do
   [ -f "$f" ] || continue
   case $(echo "$f" | tr A-Z a-z) in
-    *.nes|*.fds|*.a26|*.bin|*.rom|*.sfc|*.smc|*.gb|*.gbc|*.gba|*.gen|*.sms|*.gg|*.z64|*.n64|*.iso|*.cue|*.chd)
+    *.nes|*.fds|*.a26|*.bin|*.rom|*.sfc|*.smc|*.gb|*.gbc|*.gba|*.gen|*.smd|*.sms|*.gg|*.z64|*.n64|*.iso|*.cue|*.chd)
       echo "ROM-like file: $f"; exit 1 ;;
     *.zip|*.7z|*.rar|*.state*|*.srm|*.sav|*.png|*.jpg|*.wav) echo "archive, save or capture: $f"; exit 1 ;;
   esac
