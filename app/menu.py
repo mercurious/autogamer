@@ -2,6 +2,8 @@
 # Runs on the handheld in a fullscreen foot window (autogamer.sh): the game menu. The main games first, then the
 # bonus ones; under the list, what the highlighted game is, its ROM (or which one to add) and its model. D-pad or left
 # stick up/down moves, A, B or START plays (a game without its ROM or model only says what is missing), HOME quits.
+# SELECT turns the HUD bar (MangoHud, run.sh) on or off for the games after: STATE/hud says "off", on by default; in a
+# game SELECT is the game's (and the level menu's), so the HUD is set here, between games.
 # Writes the game's id, or "quit", to OUT; the last game played is highlighted (STATE/last_game).
 # Usage: menu.py OUT STATE      env: AG_MODELS (the models directory), AG_ROMS
 #   Reads only; never grabs the pad.
@@ -10,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from home import pads, EV_KEY, BTN_MODE
 import games
 EV_ABS, ABS_Y, ABS_HAT0Y = 3, 1, 17
-BTN_SOUTH, BTN_EAST, BTN_START = 304, 305, 315
+BTN_SOUTH, BTN_EAST, BTN_START, BTN_SELECT = 304, 305, 315, 314
 OUT, STATE = sys.argv[1], sys.argv[2]
 M = os.environ.get("AG_MODELS", "")
 GGUF = {"e2b": "gemma-4-E2B_q4_0-it.gguf", "e4b": "gemma-4-E4B_q4_0-it.gguf"}
@@ -39,6 +41,10 @@ try: last = open(os.path.join(STATE, "last_game")).read().strip()
 except OSError: last = ""
 cur = next((i for i, r in enumerate(ROWS) if r["g"]["id"] == last), 0)
 note = ""
+HUD = os.path.join(STATE, "hud"); MANGO = os.access("/usr/bin/mangohud", os.X_OK)
+def hud_on():
+    try: return open(HUD).read().strip() != "off"
+    except OSError: return True
 
 def wrap(s, w):
     out, line = [], ""
@@ -58,6 +64,7 @@ def draw():
     r = ROWS[cur]
     out += [""] + list(r["g"]["about"]) + [""] + wrap(r["rom"], width) + wrap(r["model"], width)
     out += ["", note or "Up/down: game   A or START: play   HOME: quit"]
+    if MANGO: out.append("HUD bar: ON   (SELECT turns it off)" if hud_on() else "HUD bar: OFF   (SELECT turns it on)")
     plain = lambda s: s.replace(DIM, "").replace(BOLD, "").replace(OFF, "")
     width = max(len(plain(l)) for l in out); pad = " " * max((w - width) // 2, 0)
     top = "\n" * max((h - len(out)) // 2, 0)
@@ -85,6 +92,9 @@ if __name__ == "__main__":
                         if ROWS[cur]["ok"]: done = ROWS[cur]["g"]["id"]
                         else: note = "Not playable yet: see above."
                     elif code == BTN_MODE: done = "quit"
+                    elif code == BTN_SELECT and MANGO:
+                        on = not hud_on(); os.makedirs(STATE, exist_ok=True)
+                        open(HUD, "w").write("on\n" if on else "off\n")
                 elif typ == EV_ABS and code == ABS_HAT0Y and val: move = val
                 elif typ == EV_ABS and code == ABS_Y:    # DualSense stick 0-255, centre 128: once per push
                     s = -1 if val < 48 else 1 if val > 208 else 0

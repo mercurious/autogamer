@@ -50,7 +50,8 @@
 # The level games show the level picker while the model loads (picker.py; the last pick is highlighted; AG_LEVEL 0-3
 # skips it, as does AG_PICK=0), and SELECT in the game pauses it for the same menu (level.py).
 # Usage: run.sh GAME     HOME quits (home.py; RetroArch's own exit hotkey works too): everything stops with RetroArch.
-# On screen: a MangoHud bar across the top (fps, frame times, the model at work), when MangoHud is installed.
+# On screen: a MangoHud bar across the top (fps, frame times, CPU, battery, the model at work), when MangoHud is installed
+# and the menu has it on (SELECT there; state/hud says "off").
 # RetroArch gets ROCKNIX's settings for the system (setsettings.sh, as runemu.sh does) plus autogamer.cfg for this
 # launch only (network ports on, save-state autoload/autosave off): retroarch.cfg is never edited.
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
@@ -107,6 +108,7 @@ start_llm() {
   ( exec env -u OMP_PROC_BIND -u OMP_PLACES taskset -c 4-7 "$LLAMA" -m "$M/$1.gguf" -dev none -fa off --jinja -rea off \
       -c 4096 -t 4 -np 1 --cache-ram 0 --host 127.0.0.1 --port 8099 ) > "$O/llm.log" 2>&1 &
   PIDS="$PIDS $!"
+  python3 "$V/hud.py" load $! "$M/$1.gguf" & HUDL=$!; PIDS="$PIDS $HUDL"      # the load bar on MangoHud
 }
 # the model's gguf: $1 the game's wish (AG_*_MODEL), $2 the default; E4B falls back to E2B when it is not installed
 pick_model() {
@@ -120,6 +122,7 @@ wait_llm() {
     i=$((i+1)); [ $i -gt 600 ] && exit 1; kill -0 $RAP 2>/dev/null || exit 0
     [ $((i % 10)) = 0 ] && msg "$1 loading... ${i} s"; sleep 1
   done
+  kill $HUDL 2>/dev/null; wait $HUDL 2>/dev/null
   msg "$1 ready."
 }
 
@@ -266,7 +269,7 @@ level_cfg() {
   mkdir -p "$O/states"     # RetroArch ignores a savestate_directory that does not exist (and saves to its own)
   { echo "savestate_directory = \"$O/states\""; echo 'state_slot = "0"'
     [ "$2" != 1.0 ] && printf 'audio_sync = "true"\nslowmotion_ratio = "%s"\n' "$2"; } > "$O/slow.cfg"
-  SLOW="|$O/slow.cfg"; LVL=" $(echo "$1" | tr a-z A-Z) $([ "$2" = 1.0 ] && echo "real time" || echo "1/$2")"
+  SLOW="|$O/slow.cfg"; LVL=" $(echo "$1" | tr a-z A-Z)$([ "$2" = 1.0 ] || echo " 1/$2")"
 }
 
 # RetroArch, as runemu.sh starts it, plus autogamer.cfg (and the level's settings); again after a level change
@@ -278,10 +281,11 @@ RA_CPUS=${AG_RA_CPUS-0-3}; [ -n "$RA_CPUS" ] && RUN0="taskset -c $RA_CPUS $RUN0"
 msg() { python3 "$V/ra.py" "SHOW_MSG $*" >/dev/null 2>&1; }
 start_ra() {
   level_cfg; RUN=$RUN0
-  if [ "${AG_HUD:-1}" != 0 ] && [ -x /usr/bin/mangohud ]; then
+  if [ "${AG_HUD:-1}" != 0 ] && [ -x /usr/bin/mangohud ] && [ "$(cat "$ST/hud" 2>/dev/null)" != off ]; then
     LABEL="AUTOGAMER $(echo $GAME | tr a-z- A-Z\ )"; NOMODEL='/^exec=/d'
     [ -n "$MODEL_GAME" ] && { LABEL="$AG_MODEL_LABEL${LVL:-}"; NOMODEL=""; }
-    sed -e "s|@LABEL@|$LABEL|" ${NOMODEL:+-e "$NOMODEL"} "$V/mangohud.conf" > "$O/mangohud.conf"
+    sed -e "s|@LABEL@|$LABEL|" -e "s|@SYS@|$(echo $SYS | tr a-z A-Z | sed 's/^ATARI//')|" ${NOMODEL:+-e "$NOMODEL"} \
+      "$V/mangohud.conf" > "$O/mangohud.conf"
     export MANGOHUD_CONFIGFILE="$O/mangohud.conf"; RUN="/usr/bin/mangohud $RUN"
   fi
   $RUN -L /tmp/cores/${CORE}_libretro.so $EXTRA --config /storage/.config/retroarch/retroarch.cfg \
@@ -299,7 +303,6 @@ start_ra
 # A model game waits, paused, until its model is loaded (the players unpause RetroArch when they start)
 if [ -n "$MODEL_GAME" ]; then
   python3 "$V/ra.py" GET_STATUS | grep -q PLAYING && python3 "$V/ra.py" PAUSE_TOGGLE >/dev/null
-  echo "loading the model" > /dev/shm/autogamer/hud.txt
   case $GAME in
     tennis) msg "The AI is pink. The commentator ($AG_MODEL_LABEL) is loading; the match starts when it is ready." ;;
     tetris-model) msg "The model ($AG_MODEL_LABEL) is loading. It thinks ${TL_THINK0} s a piece; SELECT changes the level (game speed)." ;;
