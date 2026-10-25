@@ -69,4 +69,8 @@ ok(all(g.get("bundled") == "pickleball/pickleball.nes" for g in games.GAMES if g
 ok(all(re.fullmatch(r"[0-9a-f]{8}", c) for g in games.GAMES for c in g["crc"]), "CRCs are 8 lower-case hex digits")
 ok(all(len(g["crc"]) == 2 for g in games.GAMES if g["system"] == "nes"), "NES games know the dump with and without header")
 ok(all(len(g["about"]) <= 3 and all(len(l) <= 60 for l in g["about"]) for g in games.GAMES), "menu text fits 3 x 60")
+ok(all(g["players"] and all(s in ("1P", "2P", "CPU", "") and w in ("you", "model", "bot", "game", "voices") and len(t) <= 34
+                            for s, w, t in g["players"]) for g in games.GAMES), "the menu card's who-plays lines fit")
+ok([g["id"] for g in games.GAMES if g.get("say")] == ["contra-coop", "sor2-coop", "pickleball-coop"],
+   "voice orders on the menu card for the three games that take them")
 print("%d/%d passed" % (n - bad, n)); sys.exit(1 if bad else 0)

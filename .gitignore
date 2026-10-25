@@ -11,3 +11,6 @@ models/
 *.7z
 *.state*
 *.srm
+# design tooling: decision rounds and their screenshots stay local
+.impeccable/questions/
+.impeccable/mocks/**/*.png

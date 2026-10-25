@@ -12,7 +12,7 @@ mkdir -p "$ST" "$H/logs"
 while :; do
   rm -f "$ST/menu.out"
   ( for i in 1 2 3 4 5 6; do sleep 0.5; swaymsg '[app_id="autogamer"] fullscreen enable' >/dev/null 2>&1 && break; done ) &
-  foot --app-id=autogamer -f "monospace:size=20" -o colors.background=030a03 -o colors.foreground=33ff66 \
+  foot --app-id=autogamer -f "monospace:size=20" -o colors.background=141210 -o colors.foreground=f4efe2 \
     python3 "$V/menu.py" "$ST/menu.out" "$ST" 2> "$H/logs/menu.log"
   G=$(cat "$ST/menu.out" 2>/dev/null)
   case $G in ""|quit) exit 0 ;; esac
