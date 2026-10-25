@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Builds the release for an aarch64 ROCKNIX handheld: dist/autogamer/ and a tarball of it. Needs an arm64 Linux host
-# with podman and git. Autogamer itself is Python and shell; the one thing built is llamatalk (llama-server,
+# with podman, git and curl. Autogamer itself is Python and shell; the one thing built is llamatalk (llama-server,
 # tts-server and models.sh), fetched at its pinned commit and built by its own build/build.sh.
 # The one game it brings, NES Pickleball (the author's homebrew cartridge, MIT), comes as the add-on tarball of its
-# pinned release (the ROM, its sidecar, its mailbox contract): fetched from GitHub (gh, signed in as the repo's owner
-# while the repo is private), or PICKLEBALL_SRC=<a tarball or an unpacked add-on directory> built by the cartridge's
-# own tools/addon.sh; the ROM must have the pinned SHA-256.
+# pinned release (the ROM, its sidecar, its mailbox contract): downloaded from the public GitHub release (curl; the
+# tarball must have the pinned SHA-256), or PICKLEBALL_SRC=<a tarball or an unpacked add-on directory> built by the
+# cartridge's own tools/addon.sh; either way the ROM must have the pinned SHA-256.
 # Env: JOBS (default 3), LLAMATALK_SRC=<a clean llamatalk checkout at LLAMATALK_COMMIT> builds from it (and its build
 # cache) instead of a fetch, ENGINE (podman, default, or docker; passed to llamatalk's build), PICKLEBALL_SRC.
 set -euo pipefail
@@ -14,6 +14,7 @@ W="$ROOT/build/work"; OUT="$ROOT/dist/autogamer"; VER=$(cat "$ROOT/VERSION")
 LLAMATALK=https://github.com/mercurious/llamatalk    LLAMATALK_COMMIT=d422c0b36c2ec7cd9359c9250a0bd8cb88f71111
 PICKLEBALL_REPO=mercurious/nes-pickleball PICKLEBALL_VERSION=0.0.2
 PICKLEBALL_ROM_SHA256=01b464bf5b8de17de03379657aa5bd1dcb3c69ab5ce980bd33374dfbccf8a674   # pickleball.nes, the v0.0.1 cartridge
+PICKLEBALL_ADDON_SHA256=000d318d16c2c22f3caea4cb36184c5afe451827d127d8a097afe04402264069  # pickleball-addon-0.0.2.tar.gz
 
 fetch() {   # fetch <url> <commit> <dir>: that one commit, nothing else
   [ "$(git -C "$3" rev-parse HEAD 2>/dev/null)" = "$2" ] && return 0
@@ -38,7 +39,12 @@ else
   TGZ=${PICKLEBALL_SRC:-}
   if [ -z "$TGZ" ]; then
     TGZ="$W/pickleball-addon-$PICKLEBALL_VERSION.tar.gz"
-    [ -f "$TGZ" ] || gh release download "v$PICKLEBALL_VERSION" -R $PICKLEBALL_REPO -p "pickleball-addon-*.tar.gz" -O "$TGZ"
+    if [ ! -f "$TGZ" ]; then
+      curl -fsSL -o "$TGZ.part" \
+        "https://github.com/$PICKLEBALL_REPO/releases/download/v$PICKLEBALL_VERSION/pickleball-addon-$PICKLEBALL_VERSION.tar.gz"
+      mv "$TGZ.part" "$TGZ"
+    fi
+    [ "$(sha256sum "$TGZ" | cut -d' ' -f1)" = "$PICKLEBALL_ADDON_SHA256" ] || { echo "$TGZ is not the pinned add-on" >&2; rm -f "$TGZ"; exit 1; }
   fi
   tar -xzf "$TGZ" -C "$PB" --strip-components=1
 fi
