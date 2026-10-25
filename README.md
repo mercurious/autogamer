@@ -208,7 +208,7 @@ Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with 
 - Storage: 4.7 GB for the models (9.8 GB with E4B, `--no-e4b` to skip it; `--no-talk` skips the 1 GB of speech
   recognition), unless another llamatalk app already has them; about 17 MB for the programs.
 - For talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner: a microphone (see above).
-- Optional: MangoHud, for the bar across the top (fps, frame times, the model at work).
+- Optional: MangoHud, for the bar across the top (fps, frame times, CPU, battery, the model loading, reading and its tok/s).
 
 ## Install
 
@@ -272,6 +272,7 @@ only (network commands on, save-state autoload off) and keeps its level-change s
 |---|---|---|
 | menu | D-pad or left stick | choose a game |
 | | A, B or START | play |
+| | SELECT | the HUD bar across the top on or off, for the games after (on at first) |
 | | HOME | back to EmulationStation |
 | level picker | up/down, A | choose the level, start (it starts by itself after 30 s) |
 | in a game | SELECT | pause and change the level (SELECT again: carry on) |
