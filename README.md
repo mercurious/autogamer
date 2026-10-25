@@ -16,7 +16,9 @@ contest: at Hard it keeps up, at Expert the game runs at real speed and the mode
 
 ## The games
 
-One **Autogamer** entry under Ports opens a menu:
+One **Autogamer** entry under Ports opens a menu, drawn like an arcade cabinet's instruction card: the games on the
+left, and for the highlighted one a card with what the model does, who plays, the orders it takes and whether its ROM
+and model are there. Left alone for 30 s it cycles through the cards. The games:
 
 | | game | who plays | what you watch |
 |---|---|---|---|
@@ -274,7 +276,8 @@ only (network commands on, save-state autoload off) and keeps its level-change s
 | | A, B or START | play |
 | | SELECT | the HUD bar across the top on or off, for the games after (on at first) |
 | | HOME | back to EmulationStation |
-| level picker | up/down, A | choose the level, start (it starts by itself after 30 s) |
+| | any button, after 30 s alone | stop cycling the cards (the press does nothing else) |
+| level picker | up/down, A | choose the level, start (it starts by itself after 30 s; the model loads meanwhile) |
 | in a game | SELECT | pause and change the level (SELECT again: carry on) |
 | | HOME | end the game, back to the menu |
 
@@ -304,7 +307,8 @@ Logs of the last run of each game are in `logs/`; think times and level choices 
 
 ## Adding a game
 
-A game is an entry in `app/games.py` (title, system, core, the dump's CRCs), a player script that reads its RAM and
+A game is an entry in `app/games.py` (title, system, core, the dump's CRCs, and for the menu's card who plays and
+any orders it takes), a player script that reads its RAM and
 presses buttons (`ra.py` and `pad.py`; `tetris_llm.py` and `ntennis_llm.py` show the model's turn, `level.py` and
 `picker.py` the levels), and a case in `app/run.sh`. `tools/ramwatch.py` shows which RAM bytes change while you play;
 `tools/corefps.py` measures the game's real speed from its frame counter. A good game for this has decisions a few
