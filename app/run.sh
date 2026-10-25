@@ -77,12 +77,12 @@ rm -rf "$O"; mkdir -p "$O" "$ST" /dev/shm/autogamer; : > /dev/shm/autogamer/hud.
 # a fullscreen terminal for a command (no RetroArch yet to show things): a message, the level picker
 onscreen() {
   ( for i in 1 2 3 4 5 6; do sleep 0.5; swaymsg '[app_id="autogamer"] fullscreen enable' >/dev/null 2>&1 && break; done ) &
-  foot --app-id=autogamer -f "monospace:size=20" -o colors.background=030a03 -o colors.foreground=33ff66 "$@"
+  foot --app-id=autogamer -f "monospace:size=20" -o colors.background=141210 -o colors.foreground=f4efe2 "$@"   # cabinet.py's
 }
-# a message on the screen for a few seconds
+# a message on the screen for a few seconds, on a card
 fail() {
   echo "autogamer: $*" >&2; echo "$*" > "$O/error.txt"
-  onscreen sh -c 'fold -s -w 60 "$1"; sleep 8' sh "$O/error.txt" 2>/dev/null
+  onscreen python3 "$V/cabinet.py" notice "Cannot start" "$O/error.txt" 8 2>/dev/null
   exit 1
 }
 

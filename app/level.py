@@ -10,7 +10,7 @@
 # (bullet time).
 # Usage: level.py RUN
 import glob, os, select, signal, struct, subprocess, sys, threading, time
-HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE); from ra import RA; import voice
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE); from ra import RA; import voice, cabinet
 from home import pads, EV_KEY, BTN_MODE
 RUN = sys.argv[1]; BTN_SELECT = 314; TTS = os.environ.get("TL_TTS", "0") == "1"
 BULLET = os.environ.get("AG_BULLET") == "1"     # Punch-Out!!: slow motion only while the model decides
@@ -53,8 +53,7 @@ def onscreen(*cmd):
             time.sleep(0.3)
             if subprocess.run(["swaymsg", '[app_id="autogamer"] fullscreen enable'], capture_output=True).returncode == 0: return
     threading.Thread(target=full, daemon=True).start()
-    subprocess.run(["foot", "--app-id=autogamer", "-f", "monospace:size=20", "-o", "colors.background=030a03",
-                    "-o", "colors.foreground=33ff66"] + list(cmd), stderr=subprocess.DEVNULL)
+    subprocess.run(cabinet.FOOT + list(cmd), stderr=subprocess.DEVNULL)
 
 def menu():
     """SELECT: pause, the level menu over the game, then resume at the same level or restart RetroArch at the new one"""

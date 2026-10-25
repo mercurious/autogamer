@@ -10,10 +10,11 @@
 # only wakes it).
 # Writes the game's id, or "quit", to OUT; the last game played is highlighted (STATE/last_game).
 # Usage: menu.py OUT STATE      env: AG_MODELS (the models directory), AG_ROMS
-#   Reads only; never grabs the pad. Draws in 24-bit colour on a cell grid (foot at 20pt on the Flip 2: 120 x 34).
-import os, select, shutil, struct, sys, time
+#   Reads only; never grabs the pad. The look is cabinet.py's.
+import os, select, struct, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from home import pads, EV_KEY, BTN_MODE
+from cabinet import INK, CARD, P1, P2, PAPER, DIM, KEY, CARDRULE, DOT, Grid, wrap, bigwrap, header, show, start, end
 import games
 EV_ABS, ABS_Y, ABS_HAT0Y = 3, 1, 17
 BTN_SOUTH, BTN_EAST, BTN_START, BTN_SELECT = 304, 305, 315, 314
@@ -24,11 +25,6 @@ TTS = "pocket-tts-english_2026-09-Q8_0.gguf"
 IDLE, ATTRACT_STEP = 30, 6
 SYS = {"nes": "NES", "atari2600": "2600", "genesis": "GEN"}
 
-# the cabinet: laminate black, card yellow (the highlighted row and its card only), P1 red, P2 blue
-INK, CARD, P1, P2, PAPER, DIM, RULE = "#141210", "#f2c230", "#e23b2e", "#2f6fe0", "#f4efe2", "#8a8378", "#3a352f"
-QUIET, KEY, CARDRULE = "#5c4a10", "#2b2620", "#b38b16"
-DOT = {"ok": ("●", "#7fc46a", "#2e7d32"), "unsure": ("◐", "#e0a43a", "#8a4b00"), "miss": ("○", "#e2614f", "#a3241a"),
-       "none": ("·", DIM, QUIET)}                     # (symbol, on the black, on the card)
 WHO = {"you": P1, "model": P2}
 
 def have(f): return bool(M) and os.path.isfile(os.path.join(M, f))
@@ -60,75 +56,6 @@ HUD = os.path.join(STATE, "hud"); MANGO = os.access("/usr/bin/mangohud", os.X_OK
 def hud_on():
     try: return open(HUD).read().strip() != "off"
     except OSError: return True
-
-def wrap(s, w):
-    out, line = [], ""
-    for word in (p[k:k + w] for p in s.split() for k in range(0, len(p), w)):   # a word longer than a line breaks
-        if line and len(line) + 1 + len(word) > w: out.append(line); line = word
-        else: line = (line + " " + word).strip()
-    return out + [line] if line else out
-
-# pixel letters, 3 x 5 (M N W wider), two pixel rows a cell with half blocks: square pixels in foot's 1:2 cells
-FONT = {"A": ".#.|#.#|###|#.#|#.#", "B": "##.|#.#|##.|#.#|##.", "C": ".##|#..|#..|#..|.##", "D": "##.|#.#|#.#|#.#|##.",
-        "E": "###|#..|##.|#..|###", "F": "###|#..|##.|#..|#..", "G": "###|#..|#.#|#.#|###", "H": "#.#|#.#|###|#.#|#.#",
-        "I": "###|.#.|.#.|.#.|###", "J": "..#|..#|..#|#.#|.#.", "K": "#.#|#.#|##.|#.#|#.#", "L": "#..|#..|#..|#..|###",
-        "M": "#...#|##.##|#.#.#|#...#|#...#", "N": "#..#|##.#|#.##|#..#|#..#", "O": "###|#.#|#.#|#.#|###",
-        "P": "##.|#.#|##.|#..|#..", "Q": ".#.|#.#|#.#|##.|.##", "R": "##.|#.#|##.|#.#|#.#", "S": ".##|#..|.#.|..#|##.",
-        "T": "###|.#.|.#.|.#.|.#.", "U": "#.#|#.#|#.#|#.#|###", "V": "#.#|#.#|#.#|#.#|.#.",
-        "W": "#...#|#...#|#.#.#|##.##|#...#", "X": "#.#|#.#|.#.|#.#|#.#", "Y": "#.#|#.#|.#.|.#.|.#.",
-        "Z": "###|..#|.#.|#..|###", "0": "###|#.#|#.#|#.#|###", "1": ".#.|##.|.#.|.#.|###", "2": "##.|..#|.#.|#..|###",
-        "3": "##.|..#|.#.|..#|##.", "4": "#.#|#.#|###|..#|..#", "5": "###|#..|##.|..#|##.", "6": ".##|#..|###|#.#|###",
-        "7": "###|..#|.#.|.#.|.#.", "8": "###|#.#|###|#.#|###", "9": "###|#.#|###|..#|##.", "!": "#|#|#|.|#",
-        "'": "#|#|.|.|.", "-": "...|...|###|...|...", ".": ".|.|.|.|#", ",": ".|.|.|#|#", ":": ".|#|.|#|.",
-        " ": "..|..|..|..|..", "?": "##.|..#|.#.|...|.#."}
-
-def pixels(text):
-    rows = [[] for _ in range(5)]
-    for k, ch in enumerate(text):
-        g = FONT.get(ch, FONT["?"]).split("|")
-        for r in range(5): rows[r] += [p == "#" for p in g[r]] + ([False] if k < len(text) - 1 else [])
-    return rows
-
-class Grid:
-    """the screen as cells [char, fg, bg, bold], written out as ANSI, run by run"""
-    def __init__(s, w, h): s.w, s.h = w, h; s.c = [[[" ", PAPER, INK, False] for _ in range(w)] for _ in range(h)]
-    def fill(s, x, y, w, h, bg, ch=" ", fg=PAPER):
-        for j in range(max(y, 0), min(y + h, s.h)):
-            for i in range(max(x, 0), min(x + w, s.w)): s.c[j][i] = [ch, fg, bg, False]
-    def put(s, x, y, text, fg, bg=None, bold=False):
-        if 0 <= y < s.h:
-            for k, ch in enumerate(text):
-                if 0 <= x + k < s.w: s.c[y][x + k] = [ch, fg, bg or s.c[y][x + k][2], bold]
-        return x + len(text)
-    def right(s, x2, y, text, fg, bg=None, bold=False): return s.put(x2 - len(text), y, text, fg, bg, bold)
-    def big(s, x, y, text, fg):
-        px = pixels(text)
-        for r in range(0, 5, 2):
-            bot = px[r + 1] if r < 4 else [False] * len(px[r])
-            for i, top in enumerate(px[r]):
-                ch = "█" if top and bot[i] else "▀" if top else "▄" if bot[i] else " "
-                if ch != " ": s.put(x + i, y + r // 2, ch, fg)
-    def ansi(s):
-        out, now = ["\033[?7l"], None
-        for y, row in enumerate(s.c):
-            out.append("\033[%d;1H" % (y + 1))
-            for ch, fg, bg, bold in row:
-                if (fg, bg, bold) != now:
-                    now = (fg, bg, bold)
-                    out.append("\033[0;%s38;2;%d;%d;%d;48;2;%d;%d;%dm" % (("1;" if bold else ""), *rgb(fg), *rgb(bg)))
-                out.append(ch)
-        return "".join(out) + "\033[0m"
-
-def rgb(h): return int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16)
-
-def bigwrap(text, w):
-    """the words in lines of at most w cells of pixel letters"""
-    out, line = [], ""
-    for word in text.split():
-        t = (line + " " + word).strip()
-        if line and len(pixels(t)[0]) > w: out.append(line); line = word
-        else: line = t
-    return out + [line] if line else out
 
 def card(sc, r, x0, y0, x1, y1):
     """the instruction card for row r: one flat yellow field from (x0, y0) to (x1, y1), exclusive"""
@@ -167,7 +94,7 @@ def card(sc, r, x0, y0, x1, y1):
         elif kind == "say": sc.put(x, y, v, INK); sc.put(x, y, v[:8], INK, bold=True); y += 1
         elif kind == "text": sc.put(x, y, v, INK); y += 1
         else: y += 1
-    sc.fill(x, ftop - 1, w, 1, CARD, "─", CARDRULE)
+    sc.rule(x, ftop - 1, w, CARD, CARDRULE)
     for k, (lab, st, t) in enumerate(flines):
         if st: sc.put(x, ftop + k, DOT[st][0], DOT[st][2]); sc.put(x + 2, ftop + k, lab, INK, bold=True)
         sc.put(x + 9, ftop + k, t, INK)
@@ -176,17 +103,13 @@ def card(sc, r, x0, y0, x1, y1):
         sc.right(x + w, ftop + 1, games.SYSNAME[g["system"]], INK)
 
 def draw(shown, attract, blink):
-    w, h = shutil.get_terminal_size((120, 34))
-    sc = Grid(w, h); L, LW = 4, min(56, w // 2 - 4); CX = L + LW
-    sc.big(L, 1, "AUTOGAMER", PAPER)
-    if w >= 90: sc.put(L + len(pixels("AUTOGAMER")[0]) + 3, 2, "a small language model plays retro games", DIM)
-    if MANGO: sc.right(w - 4, 2, "HUD BAR " + ("ON" if hud_on() else "OFF"), DIM)
-    sc.fill(L, 4, w - 2 * L, 1, INK, "─", RULE)
+    sc = Grid(); w, h = sc.w, sc.h; L, LW = 4, min(56, w // 2 - 4); CX = L + LW
+    header(sc, "HUD BAR " + ("ON" if hud_on() else "OFF") if MANGO else "")
     y = 6
     for i, r in enumerate(ROWS):
         if i == 0 or r["g"]["section"] != ROWS[i - 1]["g"]["section"]:
             if i: y += 1
-            t = r["g"]["section"].upper(); sc.put(L, y, t, DIM, bold=True); sc.fill(L + len(t) + 1, y, LW - len(t) - 4, 1, INK, "─", RULE)
+            t = r["g"]["section"].upper(); sc.put(L, y, t, DIM, bold=True); sc.rule(L + len(t) + 1, y, LW - len(t) - 4)
             y += 1
         on = i == shown; st = "ok" if r["ok"] and r["rom"][0] == "ok" else "unsure" if r["ok"] else "miss"
         fg = INK if on else PAPER if r["ok"] else DIM
@@ -199,9 +122,7 @@ def draw(shown, attract, blink):
     miss = sum(not r["ok"] for r in ROWS)
     if miss: sc.put(L + 1, y + 1, ("○ %d %s: the card says what to add." % (miss, "game cannot start" if miss == 1 else "games cannot start"))[:LW - 1], DIM)
     card(sc, ROWS[shown], CX, 6, w - 4, h - 3)
-    x = L
-    for cap, bg, lab in [("A", P1, "PLAY"), ("↑↓", KEY, "GAME")] + ([("SELECT", KEY, "HUD BAR")] if MANGO else []) + [("HOME", P2, "QUIT")]:
-        x = sc.put(x, h - 2, " %s " % cap, PAPER if bg == KEY else "#ffffff", bg, True) + 1; x = sc.put(x, h - 2, lab, PAPER) + 4
+    sc.caps(L, h - 2, [("A", P1, "PLAY"), ("↑↓", KEY, "GAME")] + ([("SELECT", KEY, "HUD BAR")] if MANGO else []) + [("HOME", P2, "QUIT")])
     if attract: sc.right(w - 4, h - 2, "PRESS ANY BUTTON" if blink else "", CARD, bold=True)
     elif note: sc.right(w - 4, h - 2, note, DOT["miss"][1], bold=True)
     return sc.ansi()
@@ -209,7 +130,7 @@ def draw(shown, attract, blink):
 if __name__ == "__main__":
     fds, seen, stick, done = {}, 0, 0, None
     t_in, frame = time.time(), None
-    sys.stdout.write("\033[?25l\033[2J"); sys.stdout.flush()
+    start()
     while done is None:
         if time.time() - seen > 2:                       # InputPlumber may (re)create the node during the launch
             for p in pads():
@@ -219,8 +140,7 @@ if __name__ == "__main__":
             seen = time.time()
         idle = time.time() - t_in; attract = idle > IDLE
         shown = (cur + 1 + int((idle - IDLE) // ATTRACT_STEP)) % len(ROWS) if attract else cur
-        f = draw(shown, attract, int(idle * 2) % 2 == 0)
-        if f != frame: sys.stdout.write(f); sys.stdout.flush(); frame = f
+        frame = show(draw(shown, attract, int(idle * 2) % 2 == 0), frame)
         r, _, _ = select.select(list(fds), [], [], 0.5)
         for fd in r:
             try: data = os.read(fd, 24 * 64)
@@ -246,7 +166,7 @@ if __name__ == "__main__":
                 if move: cur = (cur + move) % len(ROWS); note = ""
                 if done: break
             if done: break
-    sys.stdout.write("\033[0m\033[?7h\033[?25h\033[H\033[2J"); sys.stdout.flush()
+    end()
     open(OUT, "w").write(done + "\n")
     if done != "quit":
         os.makedirs(STATE, exist_ok=True); open(os.path.join(STATE, "last_game"), "w").write(done + "\n")
