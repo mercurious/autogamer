@@ -68,13 +68,13 @@ def draw(left, t_load, ready):
     sc.big(x, y0 + 2, name.upper(), INK)
     if r <= 1:
         sc.put(x, y0 + 6, "THE GAME RUNS IN REAL TIME", INK, bold=True)
-        sc.put(x, y0 + 7, "No help: the model has to keep up, and falls behind.", INK)
+        sc.put(x, y0 + 7, "No help: the model has to keep up."[:cw], INK)
     elif BULLET:
         sc.put(x, y0 + 6, "BULLET TIME AT 1/%.1f FOR EACH CALL" % r, INK, bold=True)
-        sc.put(x, y0 + 7, "The model gets a human's %s s to decide." % hs, INK)
+        sc.put(x, y0 + 7, ("The model gets a human's %s s to decide." % hs)[:cw], INK)
     else:
         sc.put(x, y0 + 6, "THE GAME RUNS AT 1/%.1f SPEED" % r, INK, bold=True)
-        sc.put(x, y0 + 7, "The model gets a human's %s s to think." % hs, INK)
+        sc.put(x, y0 + 7, ("The model gets a human's %s s to think." % hs)[:cw], INK)
     sc.put(x, y0 + 9, "GAME SPEED", INK, bold=True); sc.right(x + cw, y0 + 9, "%d%%" % round(100 / max(r, 1)), INK)
     bar(sc, x, y0 + 10, cw, 1 / max(r, 1), INK, CARDRULE)
     if THINK and float(hs) > 0:                             # the contest: what the model needs, what a human gets

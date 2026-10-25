@@ -11,6 +11,7 @@ models/
 *.7z
 *.state*
 *.srm
-# design tooling: decision rounds and their screenshots stay local
+# design tooling: decision rounds, screenshots and review captures stay local (test/check_no_roms.sh)
 .impeccable/questions/
 .impeccable/mocks/**/*.png
+.impeccable/review/
