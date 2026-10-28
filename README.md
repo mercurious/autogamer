@@ -211,6 +211,8 @@ Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with 
   recognition), unless another llamatalk app already has them; about 17 MB for the programs.
 - For talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner: a microphone (see above).
 - Optional: MangoHud, for the bar across the top (fps, frame times, CPU, battery, the model loading, reading and its tok/s).
+  SELECT in the menu turns it on or off. ROCKNIX's own MangoHud setting for the port isn't needed, and autogamer
+  ignores it, so the bar is never the system's (or another tool's, such as ETK's).
 
 ## Install
 
