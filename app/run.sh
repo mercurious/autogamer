@@ -51,7 +51,8 @@
 # skips it, as does AG_PICK=0), and SELECT in the game pauses it for the same menu (level.py).
 # Usage: run.sh GAME     HOME quits (home.py; RetroArch's own exit hotkey works too): everything stops with RetroArch.
 # On screen: a MangoHud bar across the top (fps, frame times, CPU, battery, the model at work), when MangoHud is installed
-# and the menu has it on (SELECT there; state/hud says "off").
+# and the menu has it on (SELECT there; state/hud says "off"). ROCKNIX's own MangoHud setting is not needed, and its
+# bar (the system's MangoHud.conf) never shows here.
 # RetroArch gets ROCKNIX's settings for the system (setsettings.sh, as runemu.sh does) plus autogamer.cfg for this
 # launch only (network ports on, save-state autoload/autosave off): retroarch.cfg is never edited.
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
@@ -72,6 +73,12 @@ GAME=${1:-tetris-model}; O=$H/logs/$GAME
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/0-runtime-dir} WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-1} HOME=${HOME:-/storage}
 SWAYSOCK=$(ls "$XDG_RUNTIME_DIR"/sway-ipc.*.sock 2>/dev/null | head -1); export SWAYSOCK
 ulimit -c 0
+# ROCKNIX's own MangoHud setting for the port (runemu.sh wraps it in /usr/bin/mangohud) hands everything here the
+# system's MangoHud.conf, which other tools rewrite (ETK puts its own bar there): drop it, so the bar in a game is
+# only ever autogamer's (start_ra), and the menu's SELECT alone turns it on or off.
+unset MANGOHUD MANGOHUD_CONFIG MANGOHUD_CONFIGFILE
+LD_PRELOAD=$(echo ":${LD_PRELOAD:-}:" | sed 's/:[^:]*[Mm]ango[Hh]ud[^:]*//g; s/^:*//; s/:*$//')
+if [ -n "$LD_PRELOAD" ]; then export LD_PRELOAD; else unset LD_PRELOAD; fi
 rm -rf "$O"; mkdir -p "$O" "$ST" /dev/shm/autogamer; : > /dev/shm/autogamer/hud.txt
 
 # a fullscreen terminal for a command (no RetroArch yet to show things): a message, the level picker

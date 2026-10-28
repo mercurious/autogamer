@@ -211,6 +211,8 @@ Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with 
   recognition), unless another llamatalk app already has them; about 17 MB for the programs.
 - For talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner: a microphone (see above).
 - Optional: MangoHud, for the bar across the top (fps, frame times, CPU, battery, the model loading, reading and its tok/s).
+  SELECT in the menu turns it on or off. ROCKNIX's own MangoHud setting for the port isn't needed, and autogamer
+  ignores it, so the bar is never the system's (or another tool's, such as ETK's).
 
 ## Install
 
@@ -274,7 +276,7 @@ only (network commands on, save-state autoload off) and keeps its level-change s
 |---|---|---|
 | menu | D-pad or left stick | choose a game |
 | | A, B or START | play |
-| | SELECT | the HUD bar across the top on or off, for the games after (on at first) |
+| | SELECT | the HUD bar across the top on or off, for the games after (on at first; the SELECT key lights green when it is on) |
 | | HOME | back to EmulationStation |
 | | any button, after 30 s alone | stop cycling the cards (the press does nothing else) |
 | level picker | up/down, A | choose the level, start (it starts by itself after 30 s; the model loads meanwhile) |
