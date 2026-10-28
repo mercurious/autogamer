@@ -276,7 +276,7 @@ only (network commands on, save-state autoload off) and keeps its level-change s
 |---|---|---|
 | menu | D-pad or left stick | choose a game |
 | | A, B or START | play |
-| | SELECT | the HUD bar across the top on or off, for the games after (on at first) |
+| | SELECT | the HUD bar across the top on or off, for the games after (on at first; the SELECT key lights green when it is on) |
 | | HOME | back to EmulationStation |
 | | any button, after 30 s alone | stop cycling the cards (the press does nothing else) |
 | level picker | up/down, A | choose the level, start (it starts by itself after 30 s; the model loads meanwhile) |

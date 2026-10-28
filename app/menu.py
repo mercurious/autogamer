@@ -104,7 +104,7 @@ def card(sc, r, x0, y0, x1, y1):
 
 def draw(shown, attract, blink):
     sc = Grid(); w, h = sc.w, sc.h; L, LW = 4, min(56, w // 2 - 4); CX = L + LW
-    header(sc, "HUD BAR " + ("ON" if hud_on() else "OFF") if MANGO else "")
+    header(sc)
     y = 6
     for i, r in enumerate(ROWS):
         if i == 0 or r["g"]["section"] != ROWS[i - 1]["g"]["section"]:
@@ -122,7 +122,8 @@ def draw(shown, attract, blink):
     miss = sum(not r["ok"] for r in ROWS)
     if miss: sc.put(L + 1, y + 1, ("○ %d %s: the card says what to add." % (miss, "game cannot start" if miss == 1 else "games cannot start"))[:LW - 1], DIM)
     card(sc, ROWS[shown], CX, 6, w - 4, h - 3)
-    sc.caps(L, h - 2, [("A", P1, "PLAY"), ("↑↓", KEY, "GAME")] + ([("SELECT", KEY, "HUD BAR")] if MANGO else []) + [("HOME", P2, "QUIT")])
+    hud = [("SELECT", DOT["ok"][2], "HUD BAR ON") if hud_on() else ("SELECT", KEY, "HUD BAR OFF", DIM)] if MANGO else []
+    sc.caps(L, h - 2, [("A", P1, "PLAY"), ("↑↓", KEY, "GAME")] + hud + [("HOME", P2, "QUIT")])   # SELECT is the switch, lit when on
     if attract: sc.right(w - 4, h - 2, "PRESS ANY BUTTON" if blink else "", CARD, bold=True)
     elif note: sc.right(w - 4, h - 2, note, DOT["miss"][1], bold=True)
     return sc.ansi()

@@ -82,10 +82,11 @@ class Grid:
                 if ch != " ": s.put(x + i, y + r // 2, ch, fg)
     def rule(s, x, y, w, bg=INK, fg=RULE): s.fill(x, y, w, 1, bg, "─", fg)
     def caps(s, x, y, keys):
-        """the button row: (cap, colour, label); colour P1 / P2 for the main keys, else KEY"""
-        for cap, bg, lab in keys:
+        """the button row: (cap, colour, label[, label colour]); colour P1 / P2 for the main keys, else KEY (a lit
+        switch: its own colour, and DIM on the label when it is off)"""
+        for cap, bg, lab, *fg in keys:
             x = s.put(x, y, " %s " % cap, PAPER if bg == KEY else "#ffffff", bg, True) + 1
-            x = s.put(x, y, lab, PAPER) + 4
+            x = s.put(x, y, lab, fg[0] if fg else PAPER) + 4
         return x
     def ansi(s):
         out, now = ["\033[?7l"], None
