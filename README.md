@@ -1,7 +1,7 @@
 # Autogamer
 
 A small language model plays retro games on a handheld while you watch: it places Tetris pieces, aims tennis
-returns, runs a motocross engine, picks its moments to attack in a boxing ring, fights beside you as Player 2 in Contra and Streets of Rage 2, is your talking doubles partner in NES Pickleball, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
+returns, runs a motocross engine, picks its moments to attack in a boxing ring, fights beside you as Player 2 in Contra and Streets of Rage 2, captains three heroes beside you in Gauntlet IV, is your talking doubles partner in NES Pickleball, and calls a tennis match out loud. Everything runs on the device, a Retroid Pocket Flip 2 with ROCKNIX, with
 no cloud and no account. The model is slow, so the games run in slow motion at a level you choose. That makes a
 contest: at Hard it keeps up, at Expert the game runs at real speed and the model falls behind.
 
@@ -28,6 +28,7 @@ and model are there. Left alone for 30 s it cycles through the cards. The games:
 | main | **Punch-Out!!: the model runs the offence** | a reflex loop dodges every punch; the model looks for each opponent's weak spot: dodge or counter each of his punches, then pummel, body blows or wait whenever he is open (bullet time for a first call) | the fight: win and the next opponent comes out; too late, and the opening is gone |
 | main | **Contra: the model is Player 2** (NES) | you play Player 1 on the handheld; a reflex soldier plays Player 2 and the model makes a partner's calls: cover you, lead or hang back, take a weapon or leave it for you, borrow a life. Hold R1 and tell it what to do | how far you get together; a careless partner takes your spread gun or drags the screen away from you |
 | main | **Streets of Rage 2: the model is Player 2** (Genesis) | you play Player 1; a reflex brawler plays Player 2 and the model makes a partner's calls: help you, split the crowd, gang up on the toughest punk, eat the food or leave it for you, use a continue. Hold R1 and tell it what to do | how far you get together; a partner that leaves you surrounded, or eats the chicken you needed |
+| main | **Gauntlet IV: the model is the captain** (Genesis) | you pick a hero and play it; three reflex heroes play the others, and the model captains them: which generator to destroy, who takes a key to which door, when to leave. Hold R1 and tell them what to do | how far you get together; a captain that leaves a generator standing, or wanders while health runs out |
 | main | **NES Pickleball: your partner talks** (NES, bundled) | you play doubles with the cartridge's computer partner, and it talks: it calls the score, chatters, and the model makes its calls between points (take the middle, come up, stay back, switch, be patient, attack). Hold R1 and tell it what to do | a game to 11 with a partner that listens; whether its calls win points, and what it says back |
 | main | **NES Pickleball: an exhibition, called** (NES, bundled) | the cartridge plays doubles against itself; four voices and the umpire call it, no model | a match with every score call, "mine!", "bounce it!", the umpire's faults |
 | main | **Tennis (Atari 2600): commentated** | a fast bot plays pink; the model commentates | every point called out loud, live, with the score |
@@ -143,6 +144,40 @@ Hold **R1** and talk to Player 2 as in Contra:
 | "continue" / "don't continue" | uses a continue now if it is out / never does |
 | "your call" | the model makes the calls again |
 
+### Gauntlet IV
+
+Gauntlet IV plays four at once on a Team Player, in real time with no levels. Pick your hero on the screen before the
+game (the last pick is kept; `AG_GT_HUMAN=0-3` skips it), press START through the menus to ARCADE, START to join and C to
+begin. With a Team Player each pad is tied to its hero, so autogamer moves your pad to the hero you picked (a remap file
+for that launch only), and the other three heroes join by themselves.
+
+Three reflex heroes play from the game's memory: they walk the maze from its cell map, stay with you, shoot in the
+game's eight directions, give way when they jam, and go to a cell with a true line to a generator before firing at it.
+All four share one screen, which follows the group, and nobody can walk through anybody, so heroes that each take their
+own shortest route can deadlock: on the device two ran on until the screen stopped them, which pinned a third, which
+blocked a fourth. The heroes now get themselves out of that. The model makes the calls a captain makes, one standing
+until the next: KILL a generator that is making monsters near you (one left standing makes them for ever), GET a key,
+OPEN a door (a key belongs to the hero who took it and is spent on touching), EXIT (the level ends only when all four
+are on the exit) or STAY with you. Each question carries everyone's health and keys, the monsters, what is near, and when
+the group has stopped, what blocks each hero. Until an answer comes, or when one has gone stale, a plain rule picks the
+call. Heroes that fall come back with START while the game gives credits. `AG_GT_STANDIN=1` has a fourth hero play your
+slot and press through the menus, to watch without a partner.
+
+Hold **R1** and talk to them as in Contra:
+
+| say | the heroes |
+|---|---|
+| "kill the generator", "destroy it" | KILL the nearest generator |
+| "get the key" | GET the nearest key |
+| "open the door", "unlock it" | OPEN the nearest door |
+| "head for the exit", "get out" | EXIT |
+| "stay with me", "follow me", "regroup" | STAY with you |
+| "hold on", "wait" ... then "go" | stand and shoot what comes, then go on |
+| "your call" | the model makes the calls again |
+
+An order stands until it is done or you change it, and the model's calls wait. Anything else ("nice shot") goes to the
+model with its next question, and it answers in a few words.
+
 ### NES Pickleball
 
 [NES Pickleball](https://github.com/mercurious/nes-pickleball) is a homebrew cartridge (1985 rules: side-out scoring to 11, the two-bounce rule, the
@@ -195,6 +230,7 @@ Measured on a 12 GB Flip 2 (ROCKNIX 20261001), CPU only:
 | Excitebike, E4B | 3.4-4.0 s per call; at Hardest it qualified on track 1 in 1:09.61 (the game's record was 1:16), 24 calls, about a third of the race on turbo, no overheat, one fall. Cruising only, the rider takes 72-91 s on the five tracks against qualifying times of 74-84 s: from track 3 on, the turbo decides |
 | Punch-Out!!, E4B, 8 GB Flip 2 | 4.1 s per call; at Hardest it beat Glass Joe and Von Kaiser and reached Piston Honda: 34 pummels landed 96 hits, 36 punches dodged and none taken, 16 of 42 calls too late for their opening |
 | Contra (co-op), E4B, 12 GB Flip 2 | played with a person on Player 1: 6-9 s per call. With the stand-in and the 30-lives code: Jungle screens 6 to 12 with no falls (before the jump planner, Player 2 lost most of its lives to the gaps of screens 7 and 9, and looped at 9). Known: at the Jungle's boss wall both soldiers still take hits |
+| Gauntlet IV, E4B, 12 GB Flip 2 | with a stand-in in every slot, from a cold start through `run.sh`: Level 1 in about 20 s, Level 2 in about 105 s, then on. From one saved fight on Level 3, one run each: the plain rule cleared it in 71 s, the model in 98 s with 11 generators destroyed, 5.1 s a call, 28 of 28 answers read and 9 of them stale on arrival: it has not beaten the rule. Orders heard by Qwen3-ASR in 1-2.7 s, 6 of 6 right, from synthesized speech. Not yet: a person on your slot, a person's voice |
 | NES Pickleball, E4B, 12 GB Flip 2 | the exhibition: 305 phrases rendered in 190 s at the first start (Pocket TTS at 2.2x real time), then every serve called 0.6-2.3 s into the cartridge's 4 s gate, 21 points in 3.5 minutes. Doubles with a stand-in on your slot: a call every point, 6-8 s each (13.6 s the first); orders heard by Qwen3-ASR in 0.6-1.2 s (3 s the first) and acknowledged at once; a remark answered in the partner's voice 10-15 s later. Not yet: a person at the microphone, the voices judged by ear |
 | frame pacing | the panel runs at 60 Hz during a game (put back after): 1 % of frames off the 16.7 ms cadence |
 | loading | E4B is 5 GB: the first start after a boot reads it from the SD card (a minute or more); the game waits, paused |
@@ -209,7 +245,7 @@ Not yet tested: the 8 GB Flip 2 for the other games (Punch-Out!! ran there with 
 - 12 GB of RAM tested; 8 GB untested.
 - Storage: 4.7 GB for the models (9.8 GB with E4B, `--no-e4b` to skip it; `--no-talk` skips the 1 GB of speech
   recognition), unless another llamatalk app already has them; about 17 MB for the programs.
-- For talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner: a microphone (see above).
+- For talking to Player 2 in Contra or Streets of Rage 2, your heroes in Gauntlet IV, or your pickleball partner: a microphone (see above).
 - Optional: MangoHud, for the bar across the top (fps, frame times, CPU, battery, the model loading, reading and its tok/s).
   SELECT in the menu turns it on or off. ROCKNIX's own MangoHud setting for the port isn't needed, and autogamer
   ignores it, so the bar is never the system's (or another tool's, such as ETK's).
@@ -230,8 +266,8 @@ for example on the SD card:
 ```sh
 tar xzf autogamer-aarch64.tar.gz && cd autogamer
 ./install.sh              # the models (if not already on the device), the Ports entry, and which ROMs it found
-./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike, Punch-Out!!, Contra and Streets of Rage 2 then play with E2B)
-./install.sh --no-talk    # without speech recognition (no talking to Player 2 in Contra or Streets of Rage 2, or your pickleball partner)
+./install.sh --no-e4b     # without the larger model (Tetris, NES Tennis, Excitebike, Punch-Out!!, Contra, Streets of Rage 2 and Gauntlet IV then play with E2B)
+./install.sh --no-talk    # without speech recognition (no talking to Player 2 in Contra or Streets of Rage 2, your heroes in Gauntlet IV, or your pickleball partner)
 ```
 
 Then refresh the game lists in EmulationStation and start **Autogamer** from Ports. The models go to
@@ -258,6 +294,7 @@ Put your own copies in ROCKNIX's ROM folders, zipped or not (`.zip`, `.nes`, `.a
 | Mike Tyson's Punch-Out!! (NES) | `roms/nes` | Mike Tyson's Punch-Out!! (Nintendo, 1987) | `2c818014` without the header, `3df8e170` with it |
 | Contra (NES) | `roms/nes` | Contra (Konami, 1988) | `f6035030` without the header, `c50a8304` with it |
 | Streets of Rage 2 (Genesis) | `roms/genesis` | Streets of Rage 2 (USA) | `e01fa526` |
+| Gauntlet IV (Genesis) | `roms/genesis` | Gauntlet IV (USA, Europe) | `3bf46dce` |
 | Tennis (Atari 2600) | `roms/atari2600` | Activision, 1981 | `0a42515b` |
 | NES Pickleball | bundled (`pickleball/pickleball.nes`; a copy in `roms/nes` works too) | v0.0.1, the homebrew cartridge | `8eff3aa6` without the header, `1d55c8a7` with it |
 
@@ -291,12 +328,13 @@ Environment variables for `app/autogamer.sh` or `app/run.sh` (set them in the Po
 
 | variable | meaning |
 |---|---|
-| `AG_GAME` | play this game (`tetris-model`, `ntennis-model`, `excitebike-model`, `punchout-model`, `contra-coop`, `sor2-coop`, `pickleball-coop`, `pickleball-watch`, `tennis`, `tennis-model`, `tetris`, `smb`) without the menu |
+| `AG_GAME` | play this game (`tetris-model`, `ntennis-model`, `excitebike-model`, `punchout-model`, `contra-coop`, `sor2-coop`, `gauntlet-coop`, `pickleball-coop`, `pickleball-watch`, `tennis`, `tennis-model`, `tetris`, `smb`) without the menu |
 | `AG_LEVEL` | the level, 0-3 (Hard to Expert), without the picker; `AG_PICK=0`: the last one, without the picker |
 | `AG_MODELS`, `AG_ROMS` | the models directory (default: llamatalk's shared one), the ROM folders (default `/storage/roms`) |
-| `AG_TETRIS_MODEL`, `AG_NTENNIS_MODEL`, `AG_EXCITEBIKE_MODEL`, `AG_PUNCHOUT_MODEL`, `AG_CONTRA_MODEL`, `AG_SOR2_MODEL`, `AG_PICKLEBALL_MODEL`, `AG_TENNIS_MODEL` | another model (gguf basename in the models directory) |
+| `AG_TETRIS_MODEL`, `AG_NTENNIS_MODEL`, `AG_EXCITEBIKE_MODEL`, `AG_PUNCHOUT_MODEL`, `AG_CONTRA_MODEL`, `AG_SOR2_MODEL`, `AG_GAUNTLET_MODEL`, `AG_PICKLEBALL_MODEL`, `AG_TENNIS_MODEL` | another model (gguf basename in the models directory) |
+| `AG_GT_HUMAN`, `AG_GT_STANDIN` | Gauntlet IV: your hero, 0-3 (Warrior, Valkyrie, Wizard, Elf), without the picker; `1`: a fourth hero plays your slot |
 | `AG_PB_LEVEL`, `PB_VOICES` | NES Pickleball: the cartridge's level 1-5 (the exhibition's default 3); the five Pocket TTS voices, slots 0-3 and the umpire (default `alba,jean,marius,cosette,george`) |
-| `AG_TALK=0` | no speech recognition: no talking to your partner in Contra, Streets of Rage 2 or NES Pickleball |
+| `AG_TALK=0` | no speech recognition: no talking to your partner in Contra, Streets of Rage 2, Gauntlet IV or NES Pickleball |
 | `AG_TL_GAMELEVEL` | Tetris: the NES level to start at (default: from the model's think time) |
 | `AG_NT_CPU` | NES Tennis: the game's own computer level, 1-5 (default 1) |
 | `AG_EB_TRACK` | Excitebike: the track the series starts on, 1-5 (default 1) |
@@ -319,5 +357,5 @@ seconds apart, each one visible on the screen, and a clock that keeps running wh
 ## Licence
 
 MIT, see `LICENSE`. The runtime it bundles and the models it downloads have their own licences: see
-`THIRD_PARTY.md`. NES Pickleball is the author's own (MIT). Tetris, Tennis, Excitebike, Punch-Out!!, Contra, Streets of Rage and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
+`THIRD_PARTY.md`. NES Pickleball is the author's own (MIT). Tetris, Tennis, Excitebike, Punch-Out!!, Contra, Streets of Rage, Gauntlet and Super Mario Bros. are trademarks of their owners; autogamer is not affiliated
 with or endorsed by them.

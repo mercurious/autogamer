@@ -66,7 +66,8 @@ class State:
     def x(self, i): return _sw(self.m, STRIDE * i + OX)
     def y(self, i): return _sw(self.m, STRIDE * i + OY)
     def hp(self, i): return _sw(self.m, STRIDE * i + OHP)
-    def alive(self, i): return self.hp(i) > 0
+    def joined(self, i): return self.hp(i) > 0
+    def alive(self, i): return self.hp(i) > 0 and self.pos(i) != (0, 0)     # joined and in the level: a hero waits at 0, 0
     def keys(self, i): return self.m[STRIDE * i + OKEY]
     def pos(self, i): return self.x(i), self.y(i)
     def cell(self, i): return cell_of(self.x(i), self.y(i))
@@ -103,6 +104,18 @@ class State:
         return None
 
     def free(self, i): return [d for d in DIRS if self.blocked(i, d) is None]
+
+def remap(human):
+    """the per-game remap file: the Team Player, and the player's pad on the hero they chose. Each pad is tied to its
+    hero with a Team Player (the lever at the character screen only works with fewer pads), so a pick is made here:
+    user 1, the handheld, drives that hero's port, and the user that had it drives port 0"""
+    out = ['input_libretro_device_p1 = "1537"', 'input_libretro_device_p2 = "0"']
+    if human: out += ['input_remap_port_p1 = "%d"' % human, 'input_remap_port_p%d = "0"' % (human + 1)]
+    return "\n".join(out) + "\n"
+
+def pad_of(hero, human):
+    """the network remote user that drives a hero, with remap(human) in force"""
+    return human if hero == 0 else 0 if hero == human else hero
 
 def cell_of(x, y): return (y + CELL // 2) // CELL, (x + CELL // 2) // CELL
 
@@ -355,6 +368,7 @@ class Squad:
     def step(self, st, call, now=0):
         """{player: buttons} for this poll"""
         kind = call[0]; out = {}
+        lead = self.leader if st.alive(self.leader) or not st.group() else st.group()[0]
         if kind == "kill":
             taken = []; firing = False
             for i, h in self.heroes.items():
@@ -374,8 +388,10 @@ class Squad:
                 out[i] = h.go(st, call[1], self.foes, doors=kind == "door") if i == who else h.step(st, who, self.foes)
         elif kind == "exit":
             for i, h in self.heroes.items(): out[i] = h.go(st, call[1], self.foes, doors=True)
+        elif kind == "hold":                     # stands where it is and shoots what comes
+            for i, h in self.heroes.items(): out[i] = (st.alive(i) and h.shoot_close(st, self.foes, REACH)) or []
         else:
-            for i, h in self.heroes.items(): out[i] = h.step(st, self.leader, self.foes)
+            for i, h in self.heroes.items(): out[i] = h.step(st, lead, self.foes)
         return out
 
 def read_maze(ra):
@@ -384,8 +400,9 @@ def read_maze(ra):
     if not b or len(b) < n: return None
     return _swap(b)[MAZE - a:MAZE - a + W * W]
 
-if __name__ == "__main__":       # a look at the game from RAM: python3 gauntlet.py
+if __name__ == "__main__":       # a look at the game from RAM: python3 gauntlet.py; run.sh's remap: gauntlet.py remap HERO
     import time
+    if len(sys.argv) == 3 and sys.argv[1] == "remap": sys.stdout.write(remap(int(sys.argv[2]))); sys.exit(0)
     from ra import RA
     ra = RA(timeout=0.3)
     while True:

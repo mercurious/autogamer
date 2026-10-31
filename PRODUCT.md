@@ -31,7 +31,8 @@ and model are present, and starts the chosen one. HOME returns to EmulationStati
 The model reads the game's memory, not the screen, and plays under real time pressure: it is slow, so the game runs
 in slow motion at a level you choose, and at Expert it falls behind. Each game gives the model a different job: it
 decides (Tetris), aims (Tennis), rides the turbo (Excitebike), runs the offence (Punch-Out!!), is Player 2 beside you
-(Contra, Streets of Rage 2), talks as your partner (Pickleball) or commentates (Atari Tennis). Some modes need no
+(Contra, Streets of Rage 2), captains three heroes (Gauntlet IV), talks as your partner (Pickleball) or commentates
+(Atari Tennis). Some modes need no
 model: a bot or the cartridge plays.
 
 ## Operating Context

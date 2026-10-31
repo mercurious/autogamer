@@ -11,7 +11,8 @@
 # logs/GAME), else TITLE.
 # Usage: picker.py RUN TITLE INFO [TIMEOUT] [resume]     INFO: lines above the list, split at |. The loading line names
 #   AG_MODEL_LABEL. resume: the in-game menu (level.py, SELECT): SELECT again or the timeout keeps the level.
-#   AG_BULLET=1 (Punch-Out!!): the slow motion is bullet time, for each call. Reads only; never grabs the pad.
+#   AG_BULLET=1 (Punch-Out!!): the slow motion is bullet time, for each call. AG_HERO=1 (Gauntlet IV): RUN/levels are
+#   the heroes, and the card says who plays them. Reads only; never grabs the pad.
 import os, re, select, struct, sys, time, urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from home import pads, EV_KEY, BTN_MODE
 from cabinet import INK, CARD, P1, P2, PAPER, DIM, KEY, CARDRULE, DOT, Grid, wrap, bigwidth, header, show, start, end
@@ -20,7 +21,7 @@ EV_ABS, ABS_Y, ABS_HAT0Y = 3, 1, 17
 BTN_SOUTH, BTN_EAST, BTN_START = 304, 305, 315
 RUN, TITLE, INFO = sys.argv[1], sys.argv[2], sys.argv[3].split("|"); MODEL = os.environ.get("AG_MODEL_LABEL", "The model"); TIMEOUT = float(sys.argv[4]) if len(sys.argv) > 4 else 30
 RESUME = len(sys.argv) > 5 and sys.argv[5] == "resume"; BTN_SELECT = 314
-BULLET = os.environ.get("AG_BULLET") == "1"
+BULLET = os.environ.get("AG_BULLET") == "1"; HERO = os.environ.get("AG_HERO") == "1"
 try: THINK = float(os.environ.get("TL_THINK0", ""))      # the model's think time, s (run.sh)
 except ValueError: THINK = None
 GAME = games.BY_ID.get(os.path.basename(os.path.normpath(RUN)))
@@ -46,13 +47,15 @@ def draw(left, t_load, ready):
     sc = Grid(); w, h = sc.w, sc.h; L, LW = 4, min(56, w // 2 - 4); CX = L + LW
     header(sc, "PAUSED" if RESUME else "")
     y = 6
-    sc.put(L, y, "LEVEL", DIM, bold=True); sc.rule(L + 6, y, LW - 9); y += 1
+    sc.put(L, y, "HERO" if HERO else "LEVEL", DIM, bold=True); sc.rule(L + 6, y, LW - 9); y += 1
     for i, (name, r, hs) in enumerate(LV):
         on = i == cur; fg = INK if on else PAPER
         if on: sc.fill(L, y, LW, 1, CARD)
         sc.put(L + 4, y, name, fg, bold=on)
-        sc.put(L + 14, y, "real time" if float(r) <= 1 else "1/%s speed" % r, fg if on else "#c9c1b3")
-        sc.put(L + 30, y, "no help" if hs == "0" else "a human's %s s" % hs, fg if on else "#c9c1b3")
+        if HERO: sc.put(L + 14, y, "you" if on else "the model", fg if on else "#c9c1b3")
+        else:
+            sc.put(L + 14, y, "real time" if float(r) <= 1 else "1/%s speed" % r, fg if on else "#c9c1b3")
+            sc.put(L + 30, y, "no help" if hs == "0" else "a human's %s s" % hs, fg if on else "#c9c1b3")
         if RESUME and i == start_lv: sc.right(L + LW - 2, y, "playing", INK if on else DIM)
         y += 1
     y += 2                                                  # the game, and what the level means in it
@@ -66,7 +69,10 @@ def draw(left, t_load, ready):
     sc.fill(x0, y0, x1 - x0, y1 - y0, CARD); x, cw = x0 + 3, x1 - x0 - 6
     name, r, hs = LV[cur]; r = float(r)
     sc.big(x, y0 + 2, name.upper(), INK)
-    if r <= 1:
+    if HERO:
+        sc.put(x, y0 + 6, "YOU PLAY THIS HERO", INK, bold=True)
+        sc.put(x, y0 + 7, ("%s captains the other three." % MODEL)[:cw], INK)
+    elif r <= 1:
         sc.put(x, y0 + 6, "THE GAME RUNS IN REAL TIME", INK, bold=True)
         sc.put(x, y0 + 7, "No help: the model has to keep up."[:cw], INK)
     elif BULLET:
@@ -75,8 +81,9 @@ def draw(left, t_load, ready):
     else:
         sc.put(x, y0 + 6, "THE GAME RUNS AT 1/%.1f SPEED" % r, INK, bold=True)
         sc.put(x, y0 + 7, ("The model gets a human's %s s to think." % hs)[:cw], INK)
-    sc.put(x, y0 + 9, "GAME SPEED", INK, bold=True); sc.right(x + cw, y0 + 9, "%d%%" % round(100 / max(r, 1)), INK)
-    bar(sc, x, y0 + 10, cw, 1 / max(r, 1), INK, CARDRULE)
+    if not HERO:
+        sc.put(x, y0 + 9, "GAME SPEED", INK, bold=True); sc.right(x + cw, y0 + 9, "%d%%" % round(100 / max(r, 1)), INK)
+        bar(sc, x, y0 + 10, cw, 1 / max(r, 1), INK, CARDRULE)
     if THINK and float(hs) > 0:                             # the contest: what the model needs, what a human gets
         top, bw = max(THINK, float(hs)), cw - 27
         for k, (lab, t, col) in enumerate([("THE MODEL", THINK, P2), ("A HUMAN", float(hs), P1)]):
@@ -94,9 +101,9 @@ def draw(left, t_load, ready):
         sc.put(x, fy + 1, DOT[st][0], DOT[st][2]); sc.put(x + 2, fy + 1, "MODEL", INK, bold=True)
         sc.put(x + 9, fy + 1, "%s ready" % MODEL if ready else "%s loading, %.0f s" % (MODEL, time.time() - t_load), INK)
         if frac is not None: bar(sc, x + 9, fy + 3, cw - 9 - 18, frac, INK, CARDRULE)
-    keys = [("A", P1, "PLAY"), ("↑↓", KEY, "LEVEL")] + ([("SELECT", KEY, "BACK")] if RESUME else []) + [("HOME", P2, "QUIT")]
+    keys = [("A", P1, "PLAY"), ("↑↓", KEY, "HERO" if HERO else "LEVEL")] + ([("SELECT", KEY, "BACK")] if RESUME else []) + [("HOME", P2, "QUIT")]
     sc.caps(L, h - 2, keys)
-    if not RESUME: sc.right(w - 4, h - 2, "In the game, SELECT pauses it and shows this menu.", DIM)
+    if not RESUME and not HERO: sc.right(w - 4, h - 2, "In the game, SELECT pauses it and shows this menu.", DIM)
     return sc.ansi()
 
 if __name__ == "__main__":

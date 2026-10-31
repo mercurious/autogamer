@@ -150,7 +150,7 @@ ok(any(o[0][0] == "key" for o in opt) and not any(o[0][0] == "exit" for o in opt
 ok(opt[-1][0] == ("follow",) and cap.rule(cst, csq) == ("kill", (7, 12)), "stay with player 1 is always there; the rule kills first")
 mk = bytearray(cst.m); mk[g.STRIDE * 3 + g.OKEY] = 1; kst = g.State(bytes(mk), bytes(cg))
 ok(any(o[1].startswith("OPEN") and "Elf" in o[1] for o in cap.choices(kst, csq)), "a key held: open the door, and who holds it")
-ok(not any("Warrior" in o[1] and "OPEN" not in o[1] for o in opt), "no choice orders Player 1 about")
+ok(not any("Warrior" in o[1] and not o[1].startswith(("OPEN", "STAY")) for o in opt), "no choice orders Player 1 about")
 ok(cap.pick("PICK C", 4) == 2 and cap.pick("pick", 4) is None and cap.pick("PICK F", 3) is None, "reading the answer")
 ok(cap.still_good(kst, csq, ("kill", (7, 12))) and not cap.still_good(kst, csq, ("kill", (1, 1))), "a dead target's call has run out")
 ok("Nobody has moved" in cap.facts(cst, csq, ["a"], "kill", 5, 3) and "blocked by" in cap.facts(cst, csq, ["a"], "kill", 5, 3), "frozen: the question names the blockers")
@@ -166,6 +166,26 @@ blv.update(bytes(rb), 1.0); rb[po:po + 2] = (300).to_bytes(2, "big"); blv.update
 ok(blv.births == [(300, 100)], "a record that jumps across the map is a new monster")
 rb[po:po + 2] = (302).to_bytes(2, "big"); blv.update(bytes(rb), 1.2)
 ok(blv.births == [], "one that walks is not")
+
+# the pick: the player's pad goes to the hero's port
+ok(g.remap(0).count("remap_port") == 0 and 'device_p1 = "1537"' in g.remap(0) and 'device_p2 = "0"' in g.remap(0), "Warrior: only the Team Player")
+ok('input_remap_port_p1 = "2"' in g.remap(2) and 'input_remap_port_p3 = "0"' in g.remap(2), "Wizard: swap the ports as measured")
+ok([g.pad_of(h, 2) for h in range(4)] == [2, 1, 0, 3], "the users that drive the heroes after the swap")
+ok(all(g.pad_of(k, k) == 0 and sorted(g.pad_of(h, k) for h in range(4)) == [0, 1, 2, 3] for k in range(4)), "the player is always user 0")
+
+# orders
+for w, key in (("kill the generator", "kill"), ("destroy it", "kill"), ("get the key", "key"), ("open the door", "door"), ("unlock it", "door"),
+               ("head for the exit", "exit"), ("stay with me", "follow"), ("come here", "follow"), ("hold on", "hold"), ("wait", "hold"),
+               ("let's go", "go"), ("your call", "yourcall"), ("nice shot", None)):
+    ok(cap.order_of(w) == key, "order: %r" % w)
+csq.dead = set()
+ok(cap.resolve("kill", cst, csq, 0) == ("kill", (7, 12)) and cap.resolve("key", cst, csq, 0) == ("key", (2, 3)), "an order finds its nearest target")
+ok(cap.resolve("door", state(DEAD), g.Squad(), 0) is None, "nothing to act on: no call")
+ok(g.Squad((1, 2, 3)).step(state(DEAD), ("hold",), 0) == {1: [], 2: [], 3: []}, "hold: they stand")
+ok("Valkyrie, Wizard and Elf" in cap.system(0) and "Warrior, Valkyrie and Elf" in cap.system(2), "the question knows who the human plays")
+
+wait = state([(100, 100), (0, 0), (0, 0), (0, 0)], hp=[2000, 2000, 0, 0])
+ok(wait.joined(1) and not wait.alive(1) and wait.group() == [0], "joined, waiting at 0, 0: not yet in the level")
 
 print("%d checks, %d failed" % (n, bad))
 sys.exit(1 if bad else 0)
