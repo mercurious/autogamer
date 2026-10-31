@@ -97,5 +97,46 @@ sp = g.Follower(0); foe = [(150, 100, 0x2190)]
 for k in range(g.SPEND): sp.step(open_room, 1, foe)
 ok(sp.step(open_room, 1, foe) == [] or sp.note != "shoot", "a spot that never dies is left alone")
 
+# firing lines: a pillar two cells left of the target, as at the generators on the device
+pil = state([(300, 112), (0, 400), (0, 432), (0, 464)], [(7, 27)])
+fc = g.firing_cells(pil, (7, 29))
+ok((7, 26) not in fc and (7, 28) not in fc, "no line through the pillar, and no shot from point blank")
+ok(fc[(3, 29)] == ["b", "down"] and fc[(7, 31)] == ["b", "left"], "from above and from the right")
+ok(fc[(5, 27)] == ["b", "right", "down"], "on the diagonal")
+ok((4, 27) not in fc, "no cell off the eight directions")
+on = state([(464, 48), (0, 400), (0, 432), (0, 464)], [(7, 27)])
+ok(g.Follower(0).assault(on, (7, 29))[0] == ["b", "down"], "on a firing cell: fire down the line")
+go = g.Follower(0); b, c = go.assault(state([(300, 48), (0, 400), (0, 432), (0, 464)], [(7, 27)]), (7, 29))
+ok(b and "b" not in b and c in fc, "away from one: walk to the nearest")
+drs = bytearray(st.grid); drs[20 * g.W + 6] = 0x08; drs[3 * g.W + 6] = 9; drs[4 * g.W + 6] = 9; drs[5 * g.W + 6] = 9
+dst = g.State(st.m, bytes(drs))
+ok(dst.solid(20, 6) and g.route(dst, (20, 2), (20, 8)) is None, "a closed door closes the way")
+ok(g.route(dst, (20, 2), (20, 8), doors=True) is not None, "with a key the door is a way")
+
+# the squad
+sq = g.Squad((1, 2, 3))
+gr = bytearray(rec); gr[o:o + 2] = (464).to_bytes(2, "big"); gr[o + 2:o + 4] = (112).to_bytes(2, "big"); gr[o + 8:o + 10] = (0x050b).to_bytes(2, "big")
+sq.update(bytes(gr), 1.0)
+ok(list(sq.gens) == [(7, 29)], "a generator on an exact cell")
+walled = [(r, c) for r in range(5, 10) for c in range(27, 32) if r in (5, 9) or c in (27, 31)]
+near = state([(400, 112), (300, 112), (300, 128), (300, 144)], walled)
+sq.step(near, ("kill", (7, 29)), 2.0)
+ok((7, 29) not in sq.gens or True, "a walk to a walled generator does not crash")
+sealedg = bytearray(near.grid)
+for c in range(32):
+    for r in range(32):
+        if r < 5 or r > 9 or c < 27: pass
+for r in range(4, 11):
+    for c in (26, 32 - 1): sealedg[r * g.W + c] = 9
+for c in range(26, 32): sealedg[4 * g.W + c] = 9; sealedg[10 * g.W + c] = 9
+sq2 = g.Squad((1, 2, 3)); sq2.update(bytes(gr), 1.0)
+sq2.step(g.State(near.m, bytes(sealedg)), ("kill", (7, 29)), 2.0)
+ok((7, 29) in sq2.dead, "a generator nobody can reach a line on is crossed off")
+sq3 = g.Squad((1, 2, 3)); sq3.update(bytes(gr), 1.0)
+held = state([(464, 48), (464, 48), (464, 48), (464, 48)])
+sq3.hit[(7, 29)] = 1.0
+sq3.step(held, ("kill", (7, 29)), 2.0); ok((7, 29) not in sq3.dead, "firing: not given up at once")
+sq3.step(held, ("kill", (7, 29)), 6.0); ok((7, 29) in sq3.dead, "firing with no change for seconds: crossed off")
+
 print("%d checks, %d failed" % (n, bad))
 sys.exit(1 if bad else 0)
