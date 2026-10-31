@@ -32,6 +32,12 @@
 #                 AG_SOR2_MODEL) makes its calls: help you, split the crowd, focus the toughest punk, eat the food or
 #                 leave it, continue. You pick 2 PLAYERS at the title; P2 takes its fighter. Real time, no levels; hold
 #                 R1 to give orders. AG_SR_STANDIN=1: a reflex brawler plays Player 1 as well.
+#   gauntlet-coop Gauntlet IV (Genesis, genesis_plus_gx), 4 players on a Team Player: you pick a hero before the game
+#                 and play it, gauntlet_llm.py plays the other three (reflex heroes from RAM, gauntlet.py; the network
+#                 remote for their users) and the model (E4B if installed, AG_GAUNTLET_MODEL) captains them: which
+#                 generator to destroy, who takes a key to which door, when to leave. Real time, no levels; hold R1 to
+#                 give orders. AG_GT_HUMAN=0-3: the hero (Warrior, Valkyrie, Wizard, Elf) without the picker;
+#                 AG_GT_STANDIN=1: a fourth hero plays Player 1 and the menus are pressed for you.
 #   pickleball-coop  NES Pickleball (fceumm; the bundled homebrew cartridge, pickleball/): 1 PLAYER DOUBLES, you and
 #                 the cartridge's computer partner. Its sidecar (pickleball/sidecar/pickleball_coop.py) talks to the
 #                 cartridge through its RAM mailbox: every player gets a Pocket TTS voice (the score call through the
@@ -57,8 +63,8 @@
 # launch only (network ports on, save-state autoload/autosave off): retroarch.cfg is never edited.
 # Env: AG_LLAMA (llama-server, default llamatalk's), AG_TTS (tts-server), AG_MODELS (default llamatalk's shared models
 #   directory), AG_ROMS (default /storage/roms), AG_TETRIS_MODEL / AG_TENNIS_MODEL / AG_NTENNIS_MODEL /
-#   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL / AG_CONTRA_MODEL / AG_SOR2_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
-#   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_TALK=0 (contra-coop, sor2-coop, pickleball-coop: no talking to your partner,
+#   AG_EXCITEBIKE_MODEL / AG_PUNCHOUT_MODEL / AG_CONTRA_MODEL / AG_SOR2_MODEL / AG_GAUNTLET_MODEL (gguf basename), AG_EB_TRACK (Excitebike's first track),
+#   AG_VOICE (Pocket TTS voice), NR_TTS=0 (silent), AG_TALK=0 (contra-coop, sor2-coop, gauntlet-coop, pickleball-coop: no talking to your partner,
 #   no Qwen3-ASR), AG_PB_LEVEL (pickleball: the cartridge's level), PB_VOICES (pickleball: five Pocket TTS voices,
 #   slots 0-3 and the umpire; default alba,jean,marius,cosette,george), AG_RA_CPUS (default 0-3; empty = unpinned), AG_HUD=0 (no MangoHud),
 #   AG_60HZ=0 (leave the panel at 120 Hz), AG_RA_CFG (one more RetroArch config file, appended last)
@@ -239,6 +245,29 @@ case $GAME in
       AG_SR_RECORD="$ST/sor2_record.json" AG_SR_VOICE=${AG_CT_VOICE:-0}   # what the model learns across games
     case $AG_MODEL_LABEL in E4B) THINK=4.5 ;; *) THINK=3 ;; esac   # Contra's call times: estimates
     [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB"); export TL_THINK0=$THINK ;;
+  gauntlet-coop)
+    pick_model "${AG_GAUNTLET_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts; start_asr
+    export TL_CALIB="$ST/think_gauntlet_$AG_MODEL_LABEL.txt" AG_GT_STANDIN=${AG_GT_STANDIN:-0} AG_GT_VOICE=${AG_CT_VOICE:-0}
+    case $AG_MODEL_LABEL in E4B) THINK=5.1 ;; *) THINK=3.5 ;; esac   # E4B 5.1 s a call on car12, 2026-10-31; E2B a guess
+    [ -s "$TL_CALIB" ] && THINK=$(cat "$TL_CALIB"); export TL_THINK0=$THINK
+    # With a Team Player each pad is tied to its hero, so the hero is picked here and the player's pad goes to its port
+    LAST=$(cat "$ST/hero_gauntlet.txt" 2>/dev/null); case $LAST in [0-3]) ;; *) LAST=0 ;; esac
+    if [ -z "${AG_GT_HUMAN:-}" ]; then
+      AG_GT_HUMAN=$LAST
+      if [ "${AG_PICK:-1}" != 0 ] && [ "$AG_GT_STANDIN" != 1 ]; then
+        mkdir -p "$O/hero"; printf 'Warrior 1 0\nValkyrie 1 0\nWizard 1 0\nElf 1 0\n' > "$O/hero/levels"; echo "$LAST" > "$O/hero/level"
+        AG_HERO=1 onscreen python3 "$V/picker.py" "$O/hero" "GAUNTLET IV (THE MODEL CAPTAINS)" \
+          "Pick your hero. The other three are $AG_MODEL_LABEL's: it decides which generator to destroy, who takes the key and when to leave." 2> "$O/foot.log"
+        [ -f "$O/hero/quit" ] && exit 0
+        AG_GT_HUMAN=$(cat "$O/hero/level"); echo "$AG_GT_HUMAN" > "$ST/hero_gauntlet.txt"
+      fi
+    fi
+    export AG_GT_HUMAN
+    mkdir -p "$O/remap/Genesis Plus GX"
+    python3 "$V/gauntlet.py" remap "$AG_GT_HUMAN" > "$O/remap/Genesis Plus GX/$(basename "${ROM%.*}").rmp"
+    printf 'network_remote_enable_user_p3 = "true"\nnetwork_remote_enable_user_p4 = "true"\nauto_remaps_enable = "true"\ninput_remapping_directory = "%s"\n' \
+      "$O/remap" > "$O/gauntlet.cfg"
+    GAMECFG="|$O/gauntlet.cfg" ;;
   pickleball-coop)
     pick_model "${AG_PICKLEBALL_MODEL:-}" gemma-4-E4B_q4_0-it; start_llm "$TM"; MODEL_GAME=1; start_tts; start_asr
     export TL_CALIB="$ST/think_pickleball_$AG_MODEL_LABEL.txt" PB_RECORD="$ST/pickleball_record.json" \
@@ -296,7 +325,7 @@ start_ra() {
     export MANGOHUD_CONFIGFILE="$O/mangohud.conf"; RUN="/usr/bin/mangohud $RUN"
   fi
   $RUN -L /tmp/cores/${CORE}_libretro.so $EXTRA --config /storage/.config/retroarch/retroarch.cfg \
-    --appendconfig "/tmp/.retroarch.cfg|$V/autogamer.cfg$PACE${SLOW:-}${AG_RA_CFG:+|$AG_RA_CFG}" "$ROM" >> "$O/retroarch.log" 2>&1 &
+    --appendconfig "/tmp/.retroarch.cfg|$V/autogamer.cfg$PACE${SLOW:-}${GAMECFG:-}${AG_RA_CFG:+|$AG_RA_CFG}" "$ROM" >> "$O/retroarch.log" 2>&1 &
   RAP=$!; PIDS="$PIDS $RAP"
   i=0; until python3 "$V/ra.py" GET_STATUS 2>/dev/null | grep -q "PLAYING\|PAUSED"; do
     i=$((i+1)); kill -0 $RAP 2>/dev/null || exit 1; [ $i -gt 60 ] && fail "RetroArch did not answer on UDP 55355."; sleep 0.5
@@ -319,6 +348,7 @@ if [ -n "$MODEL_GAME" ]; then
     punchout-model) msg "The model ($AG_MODEL_LABEL) is loading; it will call the attacks. SELECT changes the level." ;;
     contra-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will be Player 2. You are Player 1: hands off until the game picks 2 PLAYER." ;;
     sor2-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will be Player 2. You are Player 1: pick 2 PLAYERS. Hold R1 to talk to your partner." ;;
+    gauntlet-coop) msg "The model ($AG_MODEL_LABEL) is loading; it will captain the other three. Press START through the menus to ARCADE, then START to join." ;;
     pickleball-coop) msg "Your partner's brain ($AG_MODEL_LABEL) is loading. You are player 1; the menu is set for you. Hold R1 to talk to your partner." ;;
   esac
   wait_llm "The model ($AG_MODEL_LABEL)"
@@ -359,6 +389,9 @@ case $GAME in
     PIDS="$PIDS $!" ;;
   sor2-coop)
     $P "$V/sor2_llm.py" $FOREVER "$O/coop.jsonl" > "$O/play.out" 2>&1 &
+    PIDS="$PIDS $!" ;;
+  gauntlet-coop)
+    $P "$V/gauntlet_llm.py" $FOREVER "$O/coop.jsonl" > "$O/play.out" 2>&1 &
     PIDS="$PIDS $!" ;;
   pickleball-coop)
     $P "$H/pickleball/sidecar/pickleball_coop.py" $FOREVER "$O/coop.jsonl" --mode coop --mem > "$O/play.out" 2>&1 &

@@ -13,3 +13,5 @@ jobs:
         run: for f in install.sh app/*.sh build/*.sh test/*.sh ports/*.sh installer/*.sh; do sh -n "$f" || exit 1; done
       - name: ROM finding
         run: python3 test/test_games.py
+      - name: Gauntlet IV's maze and blockers
+        run: python3 test/test_gauntlet.py
