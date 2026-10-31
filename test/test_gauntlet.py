@@ -60,5 +60,42 @@ ok(state(DEAD, WALLS, exits=[(31, 1)]).exits() == [(31, 1)], "exits")
 hurt = state(DEAD, WALLS, hp=[2000, 2000, 0, 2000])
 ok(hurt.group() == [0, 1, 3] and hurt.blocked(3, "up") is None, "a dead player is out of the group")
 
+# the follower: the way out of the deadlock is its own, with no model
+f = g.Follower(3); f.last = st.pos(3); f.pressed = True; f.still = f.STUCK - 1
+ok(f.step(st) == ["right"] and f.note == "give way", "pinned Elf gives way to the only free side")
+ok(g.Follower(1).toward(st, (5, 6)) == ["up"], "a wall ahead: line up first")
+ok(g.Follower(2).step(state([(112, 258), (0, 300), (112, 274), (0, 332)], WALLS)) == [], "beside the leader it stands still")
+ok("down" in g.Follower(2).step(state([(112, 400), (0, 300), (112, 200), (0, 332)], WALLS)), "far from the leader it walks to it")
+fh = g.Follower(3); fh.step(state(DEAD, WALLS, hp=[2000] * 4)); fh.pressed = True
+fh.step(state(DEAD, WALLS, hp=[1999] * 4))
+ok(fh.still == 1, "health falling is not moving")
+leave = state([(0, 496), (0, 464), (0, 300), (0, 300)], [], exits=[(31, 0)])
+ok(g.Follower(1).step(leave) != [] , "the leader on the exit: followers go in after it, however near")
+
+# shooting
+open_room = state([(100, 100), (0, 300), (0, 332), (0, 364)])
+ok(g.aim(open_room, 0, [(150, 100, 0x2190)]) == ["b", "right"], "a monster to the right: fire right")
+ok(g.aim(open_room, 0, [(140, 140, 0x2190)]) == ["b", "right", "down"], "on the diagonal: both directions")
+ok(g.aim(open_room, 0, [(300, 100, 0x2190)]) is None, "out of reach: no shot")
+behind = state([(64, 200), (0, 300), (0, 332), (0, 364)], [(r, 6) for r in range(32)])
+ok(g.aim(behind, 0, [(120, 200, 0x2190)]) is None, "behind a wall: no shot")
+fs = g.Follower(0); fs.pressed = True; fs.last = open_room.pos(0); fs.still = 5
+ok(fs.step(open_room, 1, [(150, 100, 0x2190)]) == ["b", "right"] and fs.still == 0, "standing to shoot is not being stuck")
+rec = bytearray(g.OBJ_END - g.OBJ_BASE); o = g.OBJ_FIRST - g.OBJ_BASE
+rec[o:o + 2] = (300).to_bytes(2, "big"); rec[o + 2:o + 4] = (64).to_bytes(2, "big")
+rec[o + 8:o + 10] = (0x41c6).to_bytes(2, "big")
+ok(g.objects(bytes(rec)) == [(300, 64, 0x41c6)], "a monster's tile in another palette is a monster")
+rec[o + 8:o + 10] = (0x050b).to_bytes(2, "big")
+ok(g.objects(bytes(rec)) == [] and len(g.objects(bytes(rec), g.FIXTURE)) == 1, "a fixture's tile is not a monster")
+rec[o + 8:o + 10] = (0x21c6).to_bytes(2, "big")
+lv = g.Live(); m0 = bytes(rec)
+ok(lv.update(m0, 10.0) == [], "first sight: not yet shown alive")
+rec[o:o + 2] = (301).to_bytes(2, "big"); m1 = bytes(rec)
+ok(lv.update(m1, 10.2) == [(301, 64, 0x21c6)], "a record that moved is a live monster")
+ok(lv.update(m1, 11.0) != [] and lv.update(m1, 12.0) == [], "a record that stops changing is a dead one")
+sp = g.Follower(0); foe = [(150, 100, 0x2190)]
+for k in range(g.SPEND): sp.step(open_room, 1, foe)
+ok(sp.step(open_room, 1, foe) == [] or sp.note != "shoot", "a spot that never dies is left alone")
+
 print("%d checks, %d failed" % (n, bad))
 sys.exit(1 if bad else 0)

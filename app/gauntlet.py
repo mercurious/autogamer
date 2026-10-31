@@ -12,8 +12,13 @@
 #
 # RAM (68k addresses, FF0000 + offset; READ_CORE_RAM gives the 64 KB work RAM word-swapped: the byte at A is at A^1).
 # Player records repeat every 0x2C4: +0042 x, +0044 y (the top left of a 16 px box, world px, y grows down), +00F8
-# health (a binary word). The maze is 32 x 32 bytes from E246, row by row, 16 px cells, written there for each level:
-# 00 floor, 09 wall, 04 exit. Other codes (doors, keys, treasure, food, generators) are not decoded yet.
+# health (a binary word), +0108 score. The maze is 32 x 32 bytes from E246, row by row, 16 px cells, written there for each level:
+# 00 floor, 09 wall, 04 exit; players stack on an exit, and the level ends only when all of them are on it (one alone waited 38 s). Other codes (doors, keys, treasure, food, generators) are not decoded yet.
+#
+# B fires and holding it stops a player walking. The objects are a table of 0x26-byte records (see OBJ_*): their
+# attribute word is the sprite's, so the same monster shows in three palettes. A dead object's record stays, so a
+# record's presence says nothing: Live counts only those that change. Cell code 1B is a key and 08 and 07 doors
+# (a door did not open for a player without the key, which the HUD shows beside another player).
 #
 # All four players share one screen and cannot walk through each other. Each taking its own shortest route is how a
 # group deadlocks: on Level 2 two players ran down a corridor until the screen stopped them at 224 px from the top of
@@ -34,6 +39,15 @@ VIEW_H = 224                         # measured: the group's top to its bottom w
 VIEW_W = 208                         # the playfield's width on the screen; the side limit is not measured yet
 STEP = 2                             # px a probe looks ahead
 DIRS = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}
+
+OBJ_BASE, OBJ_END, OBJ_SIZE = 0x8000, 0xa800, 0x26      # the objects: x at +0, y +2, sprite attribute +8
+OBJ_FIRST = 0x8000 + (0x9dc0 - 0x8000) % OBJ_SIZE
+TILES = 0x07ff                                          # the attribute's tile; the bits above are palette and priority
+MONSTER = range(0x180, 0x300)                           # monsters' tiles, in any palette
+FIXTURE = range(0x500, 0x520)                           # generators, it seems: still, on exact cells, and monsters appear
+                                                        # beside them. A kill is not seen yet: shots stopped at a pillar
+REACH = 72                                              # px a player stops to shoot at
+SPEND = 90                                              # polls a player shoots at one spot before leaving it
 
 def _swap(b): return bytes(b[i ^ 1] for i in range(len(b)))
 
@@ -101,6 +115,24 @@ def route(st, src, dst, avoid=()):
                 prev[n] = c; q.append(n)
     return None
 
+def clear_shot(st, x, y, tx, ty):
+    """no wall on the straight line between two points"""
+    n = max(abs(tx - x), abs(ty - y)) // (CELL // 2) + 1
+    return not any(st.wall(*cell_of(x + (tx - x) * k // n, y + (ty - y) * k // n)) for k in range(1, n))
+
+def aim(st, i, foes, reach=None):
+    """the buttons that shoot at the nearest foe in reach with a clear line, or None. Holding fire stops a player
+    walking, so it holds only with a foe in reach: the eight directions, nearest to the line"""
+    reach = reach or REACH; x, y = st.pos(i); best = None
+    for fx, fy, _ in foes:
+        d = max(abs(fx - x), abs(fy - y))
+        if d <= reach and (best is None or d < best[0]) and clear_shot(st, x, y, fx, fy): best = (d, fx - x, fy - y)
+    if not best: return None
+    _, dx, dy = best; btn = ["b"]
+    if abs(dx) * 2 >= abs(dy) and dx: btn.append("right" if dx > 0 else "left")
+    if abs(dy) * 2 >= abs(dx) and dy: btn.append("down" if dy > 0 else "up")
+    return btn
+
 def describe(st, names=PLAYERS):
     """one line a player: where it can go and what stops it, for the model's question"""
     def what(b): return b if isinstance(b, str) else names[b]
@@ -111,6 +143,61 @@ def describe(st, names=PLAYERS):
                                                else "cannot move", ", ".join(stop) or "nothing in the way"))
     return lines
 
+class Follower:
+    """a reflex hero for player i: stays near the leader by a route around the others. Pressed and not moved for STUCK
+    polls, it gives way: it walks a free direction for a moment, so whoever it was jammed against can pass. self.stuck
+    counts the polls in a row it has been pinned, for the model's question. Position alone says whether it moved."""
+    NEAR = 3          # cells from the leader that are close enough
+    STUCK = 15        # polls pressed and not moved before giving way
+    AWAY = 18         # polls of giving way
+
+    def __init__(self, i):
+        self.i = i; self.last = None; self.pressed = False; self.still = 0; self.stuck = 0; self.away = []; self.note = ""; self.spent = {}
+
+    def toward(self, st, c):
+        """the buttons for the next cell: along the route, or only lining up where the route's way is walled off"""
+        x, y = st.pos(self.i); tx, ty = c[1] * CELL, c[0] * CELL; h = []; v = []
+        if abs(tx - x) > 1: h.append("right" if tx > x else "left")
+        if abs(ty - y) > 1: v.append("down" if ty > y else "up")
+        if h and v:
+            if st.hits_wall(x + DIRS[h[0]][0] * STEP, y): return v
+            if st.hits_wall(x, y + DIRS[v[0]][1] * STEP): return h
+        return h + v
+
+    def step(self, st, leader=0, foes=()):
+        i = self.i
+        if not st.alive(i): self.note = "out"; self.pressed = False; return []
+        shoot = None if self.away else aim(st, i, [f for f in foes if self.spent.get(f[:2], 0) < SPEND])
+        if shoot:                             # standing to shoot is not being stuck
+            near = min(foes, key=lambda f: max(abs(f[0] - st.x(i)), abs(f[1] - st.y(i))))
+            self.spent[near[:2]] = self.spent.get(near[:2], 0) + 1
+            self.note = "shoot"; self.pressed = False; self.last = st.pos(i); self.still = 0
+            return shoot
+        p = st.pos(i)
+        self.still = self.still + 1 if self.pressed and p == self.last else 0
+        self.stuck = self.stuck + 1 if self.still else 0
+        self.last = p
+        if self.away:
+            self.note = "give way"; self.pressed = True
+            return [self.away.pop()]
+        me, lead = st.cell(i), st.cell(leader)
+        if self.still >= self.STUCK:
+            ways = st.free(i); self.still = 0
+            if ways:
+                def left(d):      # the way that leaves the shortest walk to the leader
+                    c = (me[0] + DIRS[d][1], me[1] + DIRS[d][0]); path = route(st, c, lead)
+                    return len(path) if path else W * W
+                self.away = [min(ways, key=left)] * self.AWAY; self.note = "give way"; self.pressed = True
+                return [self.away.pop()]
+            self.note = "pinned"; self.pressed = False; return []
+        avoid = [st.cell(o) for o in st.group() if o not in (i, leader)]
+        path = route(st, me, lead, avoid) or route(st, me, lead)
+        near = 0 if st.code(*lead) == EXIT else self.NEAR      # the level ends when all are on the exit: go in after
+        if not path or len(path) <= near + 1:
+            self.note = "with the leader"; self.pressed = False; self.stuck = 0; return []
+        self.note = "follow"; btn = self.toward(st, path[1]); self.pressed = bool(btn)
+        return btn
+
 def read(ra, grid=None):
     """one poll: the players, and the maze unless a grid is given. RetroArch answers one command a frame"""
     b = ra.ram(P_BASE, P_SIZE, "READ_CORE_RAM")
@@ -119,6 +206,39 @@ def read(ra, grid=None):
         grid = read_maze(ra)
         if grid is None: return None
     return State(_swap(b), grid)
+
+def read_objects(ra):
+    b = ra.ram(OBJ_BASE, OBJ_END - OBJ_BASE, "READ_CORE_RAM")
+    return _swap(b) if b and len(b) == OBJ_END - OBJ_BASE else None
+
+def attr(m, a): return m[a + 8] * 256 + m[a + 9]
+
+def objects(m, tiles=MONSTER):
+    """(x, y, attribute) of the records with a tile in tiles, from read_objects(). A dead one's record stays"""
+    out = []
+    for a in range(OBJ_FIRST - OBJ_BASE, len(m) - OBJ_SIZE, OBJ_SIZE):
+        if attr(m, a) & TILES in tiles:
+            x, y = _sw(m, a), _sw(m, a + 2)
+            if x > 0 and y > 0: out.append((x, y, attr(m, a)))
+    return out
+
+class Live:
+    """the monsters that are really there. A dead monster's record stays in the table with its last position, so only
+    a record that moved or changed frame in the last HOLD seconds counts"""
+    HOLD = 1.5
+
+    def __init__(self): self.seen = {}
+
+    def update(self, m, now):
+        out = []
+        for a in range(OBJ_FIRST - OBJ_BASE, len(m) - OBJ_SIZE, OBJ_SIZE):
+            if attr(m, a) & TILES not in MONSTER: self.seen.pop(a, None); continue
+            x, y = _sw(m, a), _sw(m, a + 2); sig = (x, y, attr(m, a)); old = self.seen.get(a)
+            if old is None:                      # a record seen for the first time has not shown it is alive
+                self.seen[a] = (sig, now - self.HOLD - 1); continue
+            if old[0] != sig: self.seen[a] = (sig, now)
+            if now - self.seen[a][1] < self.HOLD and x > 0 and y > 0: out.append((x, y, sig[2]))
+        return out
 
 def read_maze(ra):
     a = MAZE & ~1; n = (MAZE + W * W + 2 - a) & ~1
