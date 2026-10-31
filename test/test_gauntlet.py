@@ -138,5 +138,34 @@ sq3.hit[(7, 29)] = 1.0
 sq3.step(held, ("kill", (7, 29)), 2.0); ok((7, 29) not in sq3.dead, "firing: not given up at once")
 sq3.step(held, ("kill", (7, 29)), 6.0); ok((7, 29) in sq3.dead, "firing with no change for seconds: crossed off")
 
+# the captain's question
+import gauntlet_llm as cap
+cg = bytearray(state(DEAD).grid)
+for c in range(32): cg[28 * g.W + c] = 0x09
+cg[31 * g.W + 31] = g.EXIT; cg[28 * g.W + 20] = 0x08; cg[2 * g.W + 3] = g.KEY
+csq = g.Squad((1, 2, 3)); csq.gens = {(7, 12): 0x50b}; csq.active = {(7, 12): 0.0}; csq.now = 1.0
+cst = g.State(state(DEAD).m, bytes(cg)); opt = cap.choices(cst, csq)
+ok(opt[0][0] == ("kill", (7, 12)), "a near generator comes first")
+ok(any(o[0][0] == "key" for o in opt) and not any(o[0][0] == "exit" for o in opt), "exit shut, no key held: get one")
+ok(opt[-1][0] == ("follow",) and cap.rule(cst, csq) == ("kill", (7, 12)), "stay with player 1 is always there; the rule kills first")
+mk = bytearray(cst.m); mk[g.STRIDE * 3 + g.OKEY] = 1; kst = g.State(bytes(mk), bytes(cg))
+ok(any(o[1].startswith("OPEN") and "Elf" in o[1] for o in cap.choices(kst, csq)), "a key held: open the door, and who holds it")
+ok(not any("Warrior" in o[1] and "OPEN" not in o[1] for o in opt), "no choice orders Player 1 about")
+ok(cap.pick("PICK C", 4) == 2 and cap.pick("pick", 4) is None and cap.pick("PICK F", 3) is None, "reading the answer")
+ok(cap.still_good(kst, csq, ("kill", (7, 12))) and not cap.still_good(kst, csq, ("kill", (1, 1))), "a dead target's call has run out")
+ok("Nobody has moved" in cap.facts(cst, csq, ["a"], "kill", 5, 3) and "blocked by" in cap.facts(cst, csq, ["a"], "kill", 5, 3), "frozen: the question names the blockers")
+
+# a generator counts only while it makes monsters
+act = g.Squad((1, 2, 3)); act.gens = {(7, 12): 0x50b, (8, 3): 0x502}; act.now = 100.0; act.active = {(7, 12): 95.0}
+ok(act.alive_gens(state(DEAD)) == [(7, 12)], "a quiet record is not offered")
+act.now = 120.0
+ok(act.alive_gens(state(DEAD)) == [], "nor one that has gone quiet")
+blv = g.Live(); rb = bytearray(g.OBJ_END - g.OBJ_BASE); po = g.OBJ_FIRST - g.OBJ_BASE
+rb[po + 8:po + 10] = (0x21c6).to_bytes(2, "big"); rb[po:po + 2] = (100).to_bytes(2, "big"); rb[po + 2:po + 4] = (100).to_bytes(2, "big")
+blv.update(bytes(rb), 1.0); rb[po:po + 2] = (300).to_bytes(2, "big"); blv.update(bytes(rb), 1.1)
+ok(blv.births == [(300, 100)], "a record that jumps across the map is a new monster")
+rb[po:po + 2] = (302).to_bytes(2, "big"); blv.update(bytes(rb), 1.2)
+ok(blv.births == [], "one that walks is not")
+
 print("%d checks, %d failed" % (n, bad))
 sys.exit(1 if bad else 0)

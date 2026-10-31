@@ -51,6 +51,7 @@ MONSTER = range(0x180, 0x300)                           # monsters' tiles, in an
 FIXTURE = range(0x500, 0x520)                           # generators: still, on exact cells
 REACH = 72                                              # px a player stops to shoot at
 SPEND = 90                                              # polls a player shoots at one spot before leaving it
+BIRTH, ACTIVE = 32, 15                                  # px from a generator a new monster counts as its own; seconds that lasts
 
 def _swap(b): return bytes(b[i ^ 1] for i in range(len(b)))
 
@@ -305,16 +306,18 @@ class Live:
     a record that moved or changed frame in the last HOLD seconds counts"""
     HOLD = 1.5
 
-    def __init__(self): self.seen = {}
+    def __init__(self): self.seen = {}; self.births = []
 
     def update(self, m, now):
-        out = []
+        out = []; self.births = []
         for a in range(OBJ_FIRST - OBJ_BASE, len(m) - OBJ_SIZE, OBJ_SIZE):
             if attr(m, a) & TILES not in MONSTER: self.seen.pop(a, None); continue
             x, y = _sw(m, a), _sw(m, a + 2); sig = (x, y, attr(m, a)); old = self.seen.get(a)
             if old is None:                      # a record seen for the first time has not shown it is alive
                 self.seen[a] = (sig, now - self.HOLD - 1); continue
-            if old[0] != sig: self.seen[a] = (sig, now)
+            if old[0] != sig:
+                if max(abs(x - old[0][0]), abs(y - old[0][1])) > 24 and x > 0 and y > 0: self.births.append((x, y))
+                self.seen[a] = (sig, now)
             if now - self.seen[a][1] < self.HOLD and x > 0 and y > 0: out.append((x, y, sig[2]))
         return out
 
@@ -326,7 +329,7 @@ class Squad:
 
     def __init__(self, heroes=(1, 2, 3), leader=0):
         self.heroes = {i: Follower(i) for i in heroes}; self.leader = leader; self.live = Live()
-        self.foes = []; self.gens = {}; self.dead = set(); self.hit = {}; self.killed = 0
+        self.foes = []; self.gens = {}; self.dead = set(); self.hit = {}; self.killed = 0; self.active = {}; self.now = 0
 
     def update(self, m, now):
         self.foes = self.live.update(m, now)
@@ -336,11 +339,17 @@ class Squad:
         for c, a in gens.items():
             if self.gens.get(c) != a: self.hit[c] = now
         self.gens = {c: a for c, a in gens.items() if c not in self.dead}
+        for x, y in self.live.births:            # a generator proves itself by making monsters
+            for c in self.gens:
+                if abs(c[1] * CELL - x) <= BIRTH and abs(c[0] * CELL - y) <= BIRTH: self.active[c] = now
+        self.now = now
 
     def alive_gens(self, st, cells=9):
-        """generators near the group, nearest first"""
-        me = st.cell(self.leader if st.alive(self.leader) else st.group()[0])
-        near = [c for c in self.gens if abs(c[0] - me[0]) <= cells and abs(c[1] - me[1]) <= cells]
+        """generators near the group that have made a monster lately, nearest first. Many records in the table are
+        dead ones, and hunting those wandered the group round the map for 90 s on the device"""
+        me = st.cell(self.leader if st.alive(self.leader) else st.group()[0]); now = self.now
+        near = [c for c in self.gens if abs(c[0] - me[0]) <= cells and abs(c[1] - me[1]) <= cells
+                and now - self.active.get(c, -ACTIVE) < ACTIVE]
         return sorted(near, key=lambda c: abs(c[0] - me[0]) + abs(c[1] - me[1]))
 
     def step(self, st, call, now=0):
